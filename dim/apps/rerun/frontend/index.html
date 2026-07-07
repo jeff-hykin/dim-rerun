@@ -1,0 +1,138 @@
+<!doctype html>
+<!--
+  Rerun — a shim that embeds the Rerun web viewer. This page (already an iframe in
+  the desktop) hosts an INNER iframe pointing at a Rerun web server. Enter the
+  Rerun host/port (auto-tries the default), and the viewer renders in the inner
+  window. Frontend-only — it just frames Rerun, no bridge needed.
+
+  Tip: start a server with `rerun --serve-web` (web viewer on :9090), or point at
+  any reachable Rerun web address.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Rerun · DimOS</title>
+<link rel="stylesheet" href="/assets/theme.css" />
+<style>
+  html, body { height: 100%; margin: 0; }
+  body.science { display: flex; flex-direction: column; }
+  .bar { display: flex; align-items: center; gap: 10px; padding: 9px 14px; flex: none;
+    border-bottom: 1px solid var(--border); background: var(--card); }
+  .bar .title { font-size: 14px; font-weight: 600; letter-spacing: 0.04em; }
+  .bar .grow { flex: 1; }
+  .bar label { font-size: 11px; color: var(--muted-fg); letter-spacing: 0.04em; }
+  .bar input { appearance: none; font: inherit; font-size: 13px; color: var(--fg); font-family: var(--mono);
+    background: var(--card); border: 1px solid var(--input); border-radius: var(--radius); padding: 6px 9px; }
+  .bar input:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 2px var(--ring-soft); }
+  #host { width: 150px; } #port { width: 72px; }
+  .btn { appearance: none; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary-fg); background: var(--primary);
+    border: 1px solid var(--primary); border-radius: var(--radius); padding: 7px 14px; }
+  .btn:hover { background: color-mix(in oklch, var(--primary) 88%, black); }
+  .stat { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; color: var(--muted-fg); }
+  .stat .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-fg); }
+  .stat .dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
+  .stat .dot.err { background: var(--danger); }
+
+  .frame-wrap { flex: 1; position: relative; background: #05080b; }
+  #viewer { width: 100%; height: 100%; border: 0; display: block; }
+  .overlay { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center;
+    justify-content: center; gap: 8px; text-align: center; color: var(--muted-fg); padding: 24px; }
+  .overlay.show { display: flex; }
+  .overlay .big { font-size: 14px; color: var(--fg); }
+  .overlay code { font-family: var(--mono); color: color-mix(in oklch, var(--info) 80%, var(--fg)); }
+</style>
+</head>
+<body class="science">
+<script>
+  (function () { const m = matchMedia("(prefers-color-scheme: light)");
+    const a = () => document.body.classList.toggle("dark", !m.matches); a(); m.addEventListener("change", a) })()
+</script>
+
+<div class="bar">
+  <span class="title">Rerun</span>
+  <label>host</label><input id="host" type="text" spellcheck="false" autocomplete="off" />
+  <label>port</label><input id="port" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" />
+  <button class="btn" id="connect">Connect</button>
+  <span class="grow"></span>
+  <span class="stat"><span class="dot" id="dot"></span><span id="stat">—</span></span>
+</div>
+
+<div class="frame-wrap">
+  <iframe id="viewer" title="Rerun viewer" allow="cross-origin-isolated; fullscreen; clipboard-read; clipboard-write"></iframe>
+  <div class="overlay" id="overlay">
+    <div class="big" id="ov-title">Not connected</div>
+    <div id="ov-msg">Start a viewer with <code>rerun --serve-web</code> (web on :9090), then Connect.</div>
+  </div>
+</div>
+
+<script type="module">
+const hostEl = document.getElementById("host")
+const portEl = document.getElementById("port")
+const viewer = document.getElementById("viewer")
+const dot = document.getElementById("dot")
+const statEl = document.getElementById("stat")
+const overlay = document.getElementById("overlay")
+const ovTitle = document.getElementById("ov-title")
+const ovMsg = document.getElementById("ov-msg")
+
+const saved = JSON.parse(localStorage.getItem("dimos.rerun") || "{}")
+hostEl.value = saved.host || "localhost"
+portEl.value = saved.port || "9090"
+
+// host may be a bare host, host:port, or a full URL. Build the viewer URL.
+// Rerun's web viewer (default :9090) is data-less without a `?url=` pointing at a
+// data proxy (the gRPC server, default :9876). So for a bare host:port we append
+// the default proxy so `rerun --serve-web` "just works"; paste a full URL (with
+// your own ?url=) to override.
+const DATA_PORT = 9876
+function targetUrl() {
+  let host = hostEl.value.trim()
+  const port = portEl.value.trim()
+  if (!host) host = "localhost"
+  if (/^https?:\/\//i.test(host)) return host                 // full URL pasted (keep its ?url as-is)
+  let h = host, base
+  if (host.includes(":")) { base = "http://" + host; h = host.split(":")[0] }
+  else base = `http://${host}${port ? ":" + port : ""}`
+  if (base.includes("?")) return base
+  return base + `?url=rerun%2Bhttp%3A%2F%2F${h}%3A${DATA_PORT}%2Fproxy`
+}
+function setStatus(kind, text) {
+  dot.className = "dot" + (kind === "ok" ? " on" : kind === "err" ? " err" : "")
+  statEl.textContent = text
+}
+
+let loadTimer = null
+function connect() {
+  const url = targetUrl()
+  localStorage.setItem("dimos.rerun", JSON.stringify({ host: hostEl.value.trim(), port: portEl.value.trim() }))
+  overlay.classList.remove("show")
+  setStatus("", "connecting… " + url)
+  clearTimeout(loadTimer)
+  // best-effort: cross-origin load events are unreliable, so we also show a hint
+  // if nothing loads in a few seconds.
+  loadTimer = setTimeout(() => {
+    setStatus("err", "no response from " + url)
+    ovTitle.textContent = "Couldn't reach " + url
+    ovMsg.innerHTML = 'Make sure a Rerun web viewer is serving there (<code>rerun --serve-web</code>), then Connect. ' +
+      'If it serves but won\'t embed, Rerun is sending X-Frame-Options.'
+    overlay.classList.add("show")
+  }, 6000)
+  viewer.src = url
+}
+viewer.addEventListener("load", () => {
+  // fires once the inner document loads (the Rerun viewer, or a browser error page)
+  clearTimeout(loadTimer)
+  setStatus("ok", "viewer loaded · " + targetUrl())
+  overlay.classList.remove("show")
+})
+
+document.getElementById("connect").addEventListener("click", connect)
+for (const el of [hostEl, portEl]) el.addEventListener("keydown", (e) => { if (e.key === "Enter") connect() })
+
+// auto-connect to the default / last-used on open
+connect()
+</script>
+</body>
+</html>
