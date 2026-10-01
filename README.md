@@ -40,16 +40,15 @@ On the new (Rust) dimOS Desktop:
 dimos-desktop install https://github.com/jeff-hykin/dim-rerun --ref dimos-desktop2
 ```
 
-The package is described by `dimos.yaml`; its install step (`nix run .#install`) just checks the frontend files.
+`dimos.yaml` describes the app; `nix build .#dimosApp` checks the page and icon and outputs the static page.
 
 ## Layout
 
 ```
-dim/apps/rerun/
-  app.yaml        title
-  frontend/
-    icon.svg      rail icon
-    index.html    the viewer shim (frontend-only)
+dimos.yaml        title, Desktop API range
+icon.svg          rail icon
+dim/apps/rerun/frontend/
+  index.html      the viewer shim (frontend-only)
 ```
 
 Licensed under Apache-2.0.

@@ -1,11 +1,2 @@
-name: dim-rerun
-install: nix run .#install
-apps:
-    - name: rerun
-      title: Rerun
-      icon: dim/apps/rerun/frontend/icon.svg
-      frontend: dim/apps/rerun/frontend
-requires:
-    dimos-desktop:
-        version: ">=0.2.0"
-        apis: { app.frontend: 1 }
+title: Rerun
+dimos-desktop-api: ">=1 <2"
