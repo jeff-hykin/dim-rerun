@@ -32,6 +32,16 @@ dim install https://github.com/jeff-hykin/dim-rerun
 
 The app appears in the dashboard rail within a few seconds.
 
+## dimOS Desktop
+
+On the new (Rust) dimOS Desktop:
+
+```sh
+dimos-desktop install https://github.com/jeff-hykin/dim-rerun --ref dimos-desktop2
+```
+
+The package is described by `dimos.yaml`; its install step (`nix run .#install`) just checks the frontend files.
+
 ## Layout
 
 ```
