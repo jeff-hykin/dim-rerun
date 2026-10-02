@@ -13,6 +13,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<meta name="color-scheme" content="dark" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rerun · DimOS</title>
 <link rel="stylesheet" href="theme.css" />
@@ -27,7 +28,7 @@
   .panel { position: absolute; z-index: 5; top: 10px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px);
     padding: 8px 13px; border: 1px solid var(--border); border-radius: 999px;
-    background: color-mix(in oklch, var(--card) 90%, transparent); backdrop-filter: blur(9px);
+    background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(9px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); transition: padding 0.15s ease; }
   .panel .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
   .panel label { font-size: 11px; color: var(--muted-fg); letter-spacing: 0.04em; }
@@ -59,11 +60,7 @@
   .overlay code { font-family: var(--mono); color: color-mix(in oklch, var(--info) 80%, var(--fg)); }
 </style>
 </head>
-<body class="science">
-<script>
-  (function () { const m = matchMedia("(prefers-color-scheme: light)");
-    const a = () => document.body.classList.toggle("dark", !m.matches); a(); m.addEventListener("change", a) })()
-</script>
+<body class="science dark">
 
 <div class="frame-wrap">
   <iframe id="viewer" title="Rerun viewer" allow="cross-origin-isolated; fullscreen; clipboard-read; clipboard-write"></iframe>
