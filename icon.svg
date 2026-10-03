@@ -1,8 +1,7 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" role="img" aria-label="Rerun"
-     stroke="#7f97ab" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-  <!-- replay loop -->
-  <path d="M5 12 A7 7 0 1 1 7.6 17.4" stroke="#00bcd4" />
-  <path d="M4.4 8.2 L5 12 L8.8 11" stroke="#00bcd4" />
-  <!-- play head -->
-  <path d="M10.6 9 L15.2 12 L10.6 15 Z" fill="#45e0ff" stroke="#45e0ff" stroke-width="1" />
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#c8619f" role="img" aria-label="Rerun">
+  <!-- dimOS app icon set: 24 grid, 2px round strokes, one hue per app at equal lightness, 24% tint for the duotone fill -->
+  <path d="M3.5 12A8.5 8.5 0 1 0 6 6L3.5 8.5"/>
+  <path d="M3.5 3.5v5h5"/>
+  <path d="M10 8.75v6.5l5-3.25z" fill="currentColor" fill-opacity=".24" stroke="none"/>
+  <path d="M10 8.75v6.5l5-3.25z"/>
 </svg>
