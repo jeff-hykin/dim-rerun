@@ -59,7 +59,7 @@ export function sourceAddress(v: Viewer = viewer, s: Source = source): string | 
         case "default":
             return "url" in v && v.url.includes("?") ? null : `rerun+http://${viewerHost(v)}:${DATA_PORT}/proxy`
         case "file":
-            return `${SELF}api/recording?name=${encodeURIComponent(s.path.split("/").pop() ?? "recording.rrd")}`
+            return `${SELF}api/recording/${encodeURIComponent(s.path.split("/").pop() ?? "recording.rrd")}`
         default:
             return s.address
     }
@@ -239,10 +239,16 @@ export const routes: Route[] = [
     },
     {
         method: "GET",
-        path: "api/recording",
+        path: "api/recording/{name}",
         description:
             "The local .rrd opened with api/open path, as bytes (what the viewer loads; CORS-open so a viewer on another port can fetch it)",
-        params: { name: { type: "string", description: "file name, only for the viewer's display" } },
+        params: {
+            name: {
+                type: "string",
+                required: true,
+                description: "the file's name (the viewer goes by its .rrd extension)",
+            },
+        },
         handler: async () => {
             if (source.kind !== "file") {
                 throw new HttpError(404, "no local recording is open (api/open with path)")

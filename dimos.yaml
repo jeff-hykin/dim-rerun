@@ -46,11 +46,12 @@ agent:
           path: api/reconnect
           description: Check the viewer again now and reload its frame (when it was restarted or shows stale data)
         - method: GET
-          path: api/recording
+          path: "api/recording/{name}"
           description: >-
               The local .rrd opened with api/open path, as bytes (what the viewer loads; CORS-open so a viewer on another port
               can fetch it)
           params:
               name:
                   type: string
-                  description: 'file name, only for the viewer''s display'
+                  required: true
+                  description: the file's name (the viewer goes by its .rrd extension)

@@ -16,14 +16,14 @@ connected the controls collapse into a pill (click it to edit).
 Every action is an HTTP endpoint (`backend/routes.ts`, served as `agent.json` and listed in `dimos.yaml`), so Desktop's
 agent drives the app like the UI does:
 
-| endpoint             | what                                                                                     |
-| -------------------- | ---------------------------------------------------------------------------------------- |
-| `GET api/state`      | the viewer framed, what it shows, the frame URL, whether the viewer is reachable         |
-| `POST api/viewer`    | `host` + `port` (or `url`): connect to a Rerun web viewer                                |
-| `POST api/open`      | `url` (a `rerun+http://…/proxy` stream or an `.rrd` URL) or `path` (a local `.rrd` file) |
-| `DELETE api/open`    | back to the viewer's default stream (`rerun+http://<host>:9876/proxy`)                   |
-| `POST api/reconnect` | check the viewer again and reload the frame                                              |
-| `GET api/recording`  | the opened local `.rrd`'s bytes (what the viewer fetches)                                |
+| endpoint                   | what                                                                                     |
+| -------------------------- | ---------------------------------------------------------------------------------------- |
+| `GET api/state`            | the viewer framed, what it shows, the frame URL, whether the viewer is reachable         |
+| `POST api/viewer`          | `host` + `port` (or `url`): connect to a Rerun web viewer                                |
+| `POST api/open`            | `url` (a `rerun+http://…/proxy` stream or an `.rrd` URL) or `path` (a local `.rrd` file) |
+| `DELETE api/open`          | back to the viewer's default stream (`rerun+http://<host>:9876/proxy`)                   |
+| `POST api/reconnect`       | check the viewer again and reload the frame                                              |
+| `GET api/recording/{name}` | the opened local `.rrd`'s bytes (what the viewer fetches)                                |
 
 There is no `view` endpoint: the viewer is a cross-origin iframe, so neither the page nor the server can capture it.
 
