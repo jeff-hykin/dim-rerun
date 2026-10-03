@@ -1,7 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#c8619f" role="img" aria-label="Rerun">
-  <!-- dimOS app icon set: 24 grid, 2px round strokes, one hue per app at equal lightness, 24% tint for the duotone fill -->
-  <path d="M3.5 12A8.5 8.5 0 1 0 6 6L3.5 8.5"/>
-  <path d="M3.5 3.5v5h5"/>
-  <path d="M10 8.75v6.5l5-3.25z" fill="currentColor" fill-opacity=".24" stroke="none"/>
-  <path d="M10 8.75v6.5l5-3.25z"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Rerun">
+  <!-- dimOS app icon set v6: dark glass tile tinted to the glyph, neon gradient glyph with a soft bloom -->
+  <defs>
+    <radialGradient id="tile" cx=".5" cy=".18" r=".95"><stop offset="0" stop-color="#3a0c22"/><stop offset="1" stop-color="#07070f"/></radialGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".13"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".25" stop-color="#fff" stop-opacity=".1"/><stop offset="1" stop-color="#fff" stop-opacity=".06"/></linearGradient>
+    <filter id="bloom" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2.4"/></filter>
+    <linearGradient id="a" gradientUnits="userSpaceOnUse" x1="0" y1="14" x2="0" y2="50"><stop offset="0" stop-color="#ffa0c8"/><stop offset="1" stop-color="#ff2d55"/></linearGradient>
+    <g id="glyph"><path d="M20.67 26.72A12.5 12.5 0 1 1 21.17 38.25" fill="none" stroke="url(#a)" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M18.35 31.7L16.14 24.6L25.2 28.83Z" fill="url(#a)" stroke="url(#a)" stroke-width="1.2" stroke-linejoin="round"/>
+      <path d="M28.8 25.6L38.6 32L28.8 38.4Z" fill="url(#a)" stroke="url(#a)" stroke-width="2.4" stroke-linejoin="round"/></g>
+  </defs>
+  <path d="M16 2H48A14 14 0 0 1 62 16V48A14 14 0 0 1 48 62H16A14 14 0 0 1 2 48V16A14 14 0 0 1 16 2Z" fill="url(#tile)"/>
+  <path d="M16 3H48A13 13 0 0 1 61 16V24H3V16A13 13 0 0 1 16 3Z" fill="url(#sheen)"/>
+  <g transform="translate(32 32) scale(1.12) translate(-32 -32)">
+    <use href="#glyph" filter="url(#bloom)"/>
+    <use href="#glyph"/>
+  </g>
+  <path d="M16 2H48A14 14 0 0 1 62 16V48A14 14 0 0 1 48 62H16A14 14 0 0 1 2 48V16A14 14 0 0 1 16 2Z" fill="none" stroke="url(#rim)" stroke-width="1"/>
 </svg>
