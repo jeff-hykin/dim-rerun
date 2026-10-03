@@ -13,7 +13,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="color-scheme" content="dark" />
+<meta name="color-scheme" content="light dark" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Rerun · DimOS</title>
 <link rel="stylesheet" href="theme.css" />
@@ -21,25 +21,17 @@
   html, body { height: 100%; margin: 0; }
   body.science { display: flex; flex-direction: column; }
 
-  .frame-wrap { flex: 1; position: relative; background: #05080b; overflow: hidden; }
+  .frame-wrap { flex: 1; position: relative; background: var(--bg); overflow: hidden; }
   #viewer { width: 100%; height: 100%; border: 0; display: block; }
 
   /* floating control panel, top-center over the viewer */
   .panel { position: absolute; z-index: 5; top: 10px; left: 50%; transform: translateX(-50%);
     display: flex; align-items: center; gap: 10px; max-width: calc(100% - 20px);
-    padding: 8px 13px; border: 1px solid var(--border); border-radius: 999px;
-    background: color-mix(in srgb, var(--card) 90%, transparent); backdrop-filter: blur(9px);
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.4); transition: padding 0.15s ease; }
+    padding: 8px 13px; border-radius: 999px; box-shadow: var(--shadow-md); transition: padding 0.15s ease; }
   .panel .title { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; }
-  .panel label { font-size: 11px; color: var(--muted-fg); letter-spacing: 0.04em; }
-  .panel input { appearance: none; font: inherit; font-size: 13px; color: var(--fg); font-family: var(--mono);
-    background: var(--card); border: 1px solid var(--input); border-radius: var(--radius); padding: 6px 9px; }
-  .panel input:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 2px var(--ring-soft); }
+  .panel input { font-size: 13px; padding: 6px 9px; }
   #host { width: 140px; } #port { width: 68px; }
-  .btn { appearance: none; cursor: pointer; font: inherit; font-size: 12px; font-weight: 600;
-    letter-spacing: 0.04em; text-transform: uppercase; color: var(--primary-fg); background: var(--primary);
-    border: 1px solid var(--primary); border-radius: var(--radius); padding: 7px 14px; }
-  .btn:hover { background: color-mix(in oklch, var(--primary) 88%, black); }
+  #connect { padding: 8px 14px; }
   .stat { display: flex; align-items: center; gap: 7px; font-family: var(--mono); font-size: 12px; color: var(--muted-fg); }
   .stat .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted-fg); flex: none; }
   .stat .dot.on { background: var(--ok); box-shadow: 0 0 6px var(--ok); }
@@ -54,13 +46,14 @@
   /* centered message; opaque so nothing behind it can bleed through */
   .overlay { position: absolute; inset: 0; z-index: 2; display: none; flex-direction: column;
     align-items: center; justify-content: center; gap: 8px; text-align: center; color: var(--muted-fg);
-    padding: 24px; background: #05080b; }
+    padding: 24px; background: var(--bg); }
   .overlay.show { display: flex; }
   .overlay .big { font-size: 14px; color: var(--fg); }
   .overlay code { font-family: var(--mono); color: color-mix(in oklch, var(--info) 80%, var(--fg)); }
 </style>
 </head>
-<body class="science dark">
+<body class="science">
+<script src="dim-theme.js"></script>
 
 <div class="frame-wrap">
   <iframe id="viewer" title="Rerun viewer" allow="cross-origin-isolated; fullscreen; clipboard-read; clipboard-write"></iframe>
@@ -70,11 +63,11 @@
     <div id="ov-msg">Start one with <code>rerun --serve-web</code> (web on :9090). This keeps retrying.</div>
   </div>
 
-  <div class="panel" id="panel">
+  <div class="panel dim-panel glass" id="panel">
     <span class="title">Rerun</span>
-    <label>host</label><input id="host" type="text" spellcheck="false" autocomplete="off" />
-    <label>port</label><input id="port" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" />
-    <button class="btn" id="connect">Connect</button>
+    <label class="dim-label">host</label><input class="dim-input dim-mono" id="host" type="text" spellcheck="false" autocomplete="off" />
+    <label class="dim-label">port</label><input class="dim-input dim-mono" id="port" type="text" inputmode="numeric" spellcheck="false" autocomplete="off" />
+    <button class="dim-btn primary" id="connect">Connect</button>
     <span class="stat"><span class="dot" id="dot"></span><span id="stat">…</span></span>
   </div>
 </div>
