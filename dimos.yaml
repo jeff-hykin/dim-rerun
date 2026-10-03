@@ -1,2 +1,56 @@
 title: Rerun
 dimos-desktop-api: ">=2 <3"
+caches:
+    - url: "https://dimos-desktop.cachix.org"
+      key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
+agent:
+    description: "Rerun: shows a Rerun web viewer (rerun --serve-web) inside Desktop, on a live stream or a recording (.rrd)"
+    endpoints:
+        - method: GET
+          path: api/state
+          description: >-
+              Rerun's state: which web viewer it frames (host:port or URL), what that viewer shows (default stream, a stream
+              address, a recording URL or local .rrd), the frame URL, and whether the viewer is reachable
+          role: context
+        - method: POST
+          path: api/viewer
+          description: >-
+              Connect to a Rerun web viewer (the UI's host/port + Connect): host and port of `rerun --serve-web` (default port
+              9090), or url, a full viewer URL (its own ?url= is kept). Answers whether it is reachable
+          params:
+              host:
+                  type: string
+                  description: "viewer host, e.g. localhost (or host:port)"
+              port:
+                  type: string
+                  description: viewer web port (default 9090)
+              url:
+                  type: string
+                  description: a full http(s) viewer URL instead of host/port
+        - method: POST
+          path: api/open
+          description: >-
+              Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd
+              recording URL; or path = a local .rrd file (served to the viewer by this app)
+          params:
+              url:
+                  type: string
+                  description: "rerun+http(s):// stream address, or http(s) URL of a .rrd"
+              path:
+                  type: string
+                  description: absolute path of a local .rrd file
+        - method: DELETE
+          path: api/open
+          description: 'Go back to the viewer''s default live stream (rerun+http://<viewer host>:9876/proxy)'
+        - method: POST
+          path: api/reconnect
+          description: Check the viewer again now and reload its frame (when it was restarted or shows stale data)
+        - method: GET
+          path: api/recording
+          description: >-
+              The local .rrd opened with api/open path, as bytes (what the viewer loads; CORS-open so a viewer on another port
+              can fetch it)
+          params:
+              name:
+                  type: string
+                  description: 'file name, only for the viewer''s display'

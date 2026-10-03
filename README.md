@@ -1,54 +1,39 @@
 # dim-rerun
 
-A [DimOS dashboard](https://github.com/jeff-hykin/dim-app) app that embeds the
-**[Rerun](https://rerun.io) web viewer** right in the desktop, so you can watch a
-live Rerun stream without leaving DimOS.
-
-Enter the host/port of a running Rerun web viewer and it renders in an inner
-frame. It auto-connects to the last-used (or default `localhost:9090`) on open.
-
-## How it works
-
-Frontend-only — there's no backend. The page is a thin shim: it builds the
-viewer URL and points an inner iframe at it. For a bare `host:port` it appends
-Rerun's default data proxy (`:9876`) so `rerun --serve-web` just works; paste a
-full URL with your own `?url=` to override.
-
-## Usage
-
-Start a viewer and connect:
+A [dimOS Desktop](https://github.com/jeff-hykin/dimos-desktop) app that shows the **[Rerun](https://rerun.io) web
+viewer** inside Desktop: a live stream, or a recording (`.rrd`).
 
 ```sh
-rerun --serve-web        # web viewer on :9090, data proxy on :9876
+rerun --serve-web     # web viewer on :9090, data proxy on :9876
+dimos-desktop install https://github.com/jeff-hykin/dim-rerun
 ```
 
-Then open the Rerun app in the dashboard and hit Connect.
+It connects to the last-used viewer (default `localhost:9090`) and frames it once it answers, retrying until then; once
+connected the controls collapse into a pill (click it to edit).
 
-## Install
+## Endpoints
+
+Every action is an HTTP endpoint (`backend/routes.ts`, served as `agent.json` and listed in `dimos.yaml`), so Desktop's
+agent drives the app like the UI does:
+
+| endpoint             | what                                                                                     |
+| -------------------- | ---------------------------------------------------------------------------------------- |
+| `GET api/state`      | the viewer framed, what it shows, the frame URL, whether the viewer is reachable         |
+| `POST api/viewer`    | `host` + `port` (or `url`): connect to a Rerun web viewer                                |
+| `POST api/open`      | `url` (a `rerun+http://…/proxy` stream or an `.rrd` URL) or `path` (a local `.rrd` file) |
+| `DELETE api/open`    | back to the viewer's default stream (`rerun+http://<host>:9876/proxy`)                   |
+| `POST api/reconnect` | check the viewer again and reload the frame                                              |
+| `GET api/recording`  | the opened local `.rrd`'s bytes (what the viewer fetches)                                |
+
+There is no `view` endpoint: the viewer is a cross-origin iframe, so neither the page nor the server can capture it.
+
+## Development
 
 ```sh
-dim install https://github.com/jeff-hykin/dim-rerun
-```
-
-The app appears in the dashboard rail within a few seconds.
-
-## dimOS Desktop
-
-On the new (Rust) dimOS Desktop:
-
-```sh
-dimos-desktop install https://github.com/jeff-hykin/dim-rerun --ref dimos-desktop2
-```
-
-`dimos.yaml` describes the app; `nix build .#dimosApp` checks the page and icon and outputs the static page.
-
-## Layout
-
-```
-dimos.yaml        title, Desktop API range
-icon.svg          rail icon
-dim/apps/rerun/frontend/
-  index.html      the viewer shim (frontend-only)
+deno task test && deno task check     # backend tests, dimos.yaml ↔ routes check
+cd frontend && npm install && npm run typecheck && npm run build
+deno task dev                         # backend on :8787; `npm run dev` in frontend proxies api/ to it
+nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
 ```
 
 Licensed under Apache-2.0.

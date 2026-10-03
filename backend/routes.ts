@@ -1,0 +1,263 @@
+// Every Rerun action, as an endpoint (http.ts). The UI calls these; so can Desktop's agent.
+//
+// The page frames a Rerun web viewer (`rerun --serve-web`, :9090) in an iframe, pointed at a source with `?url=`: by
+// default the viewer host's gRPC data proxy (rerun+http://<host>:9876/proxy), or a recording (.rrd URL, or a local .rrd
+// file this server hands out at api/recording). This server keeps the target, checks the viewer is reachable (so the
+// page never frames a connection error) and pushes every change on api/events/ws.
+import { HttpError, publishEvent, type Route } from "./http.ts"
+
+export const DESCRIPTION =
+    "Rerun: shows a Rerun web viewer (rerun --serve-web) inside Desktop, on a live stream or a recording (.rrd)"
+
+export const DATA_PORT = 9876
+/** the page puts its own absolute base (…/apps/<name>/) in place of this, for sources this server serves */
+export const SELF = "@app/"
+const PROBE_TIMEOUT_MS = 2500
+
+type Viewer = { host: string; port: string } | { url: string }
+type Source = { kind: "default" } | { kind: "stream" | "url"; address: string } | { kind: "file"; path: string }
+
+const dataDir = Deno.env.get("DIMOS_APP_DATA")
+const savedFile = dataDir ? `${dataDir}/target.json` : null
+
+function load(): { viewer: Viewer; source: Source } {
+    try {
+        if (savedFile) {
+            return JSON.parse(Deno.readTextFileSync(savedFile))
+        }
+    } catch {
+        // first run
+    }
+    return { viewer: { host: "localhost", port: "9090" }, source: { kind: "default" } }
+}
+
+let { viewer, source } = load()
+let reachable: boolean | null = null
+let checkedAt: string | null = null
+/** bumped by api/reconnect: pages reload the viewer frame */
+let reload = 0
+
+/** the viewer's plain http origin, what the probe checks */
+export function viewerOrigin(v: Viewer = viewer): string {
+    if ("url" in v) {
+        try {
+            return new URL(v.url).origin
+        } catch {
+            return v.url
+        }
+    }
+    return `http://${v.host}${v.port ? `:${v.port}` : ""}`
+}
+
+function viewerHost(v: Viewer): string {
+    return "url" in v ? (URL.canParse(v.url) ? new URL(v.url).hostname : "localhost") : v.host.split(":")[0]
+}
+
+/** what the viewer is told to show (its `?url=`); SELF-prefixed for a local file */
+export function sourceAddress(v: Viewer = viewer, s: Source = source): string | null {
+    switch (s.kind) {
+        case "default":
+            return "url" in v && v.url.includes("?") ? null : `rerun+http://${viewerHost(v)}:${DATA_PORT}/proxy`
+        case "file":
+            return `${SELF}api/recording?name=${encodeURIComponent(s.path.split("/").pop() ?? "recording.rrd")}`
+        default:
+            return s.address
+    }
+}
+
+/** the iframe's src */
+export function frameUrl(v: Viewer = viewer, s: Source = source): string {
+    const address = sourceAddress(v, s)
+    if ("url" in v && (v.url.includes("?") && s.kind === "default")) {
+        return v.url
+    }
+    const base = "url" in v ? v.url.split("?")[0] : `${viewerOrigin(v)}/`
+    return address ? `${base}?url=${encodeURIComponent(address)}` : base
+}
+
+export function state() {
+    return {
+        viewer,
+        viewerOrigin: viewerOrigin(),
+        source: { ...source, address: sourceAddress() },
+        frameUrl: frameUrl(),
+        reachable,
+        checkedAt,
+        reload,
+        hint: "start a viewer with `rerun --serve-web` (web viewer on :9090, data proxy on :9876)",
+    }
+}
+
+function changed() {
+    publishEvent({ type: "state", ...state() })
+}
+
+async function save() {
+    if (savedFile) {
+        await Deno.writeTextFile(savedFile, JSON.stringify({ viewer, source }))
+    }
+}
+
+/** Is the viewer's web server answering? (any HTTP response counts) */
+export async function probe(): Promise<boolean> {
+    const origin = viewerOrigin()
+    let ok = false
+    try {
+        const response = await fetch(origin, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
+        await response.body?.cancel()
+        ok = true
+    } catch {
+        ok = false
+    }
+    if (origin !== viewerOrigin()) {
+        return ok // the target changed meanwhile: that change probes for itself
+    }
+    const before = reachable
+    reachable = ok
+    checkedAt = new Date().toISOString()
+    if (before !== ok) {
+        changed()
+    }
+    return ok
+}
+
+/** main.ts keeps the reachability fresh while the app runs */
+export function startProbing(everyMs = 3000) {
+    probe()
+    return setInterval(probe, everyMs)
+}
+
+const text = (value: unknown) => (typeof value === "string" ? value.trim() : value === undefined ? "" : String(value))
+
+export const routes: Route[] = [
+    {
+        method: "GET",
+        path: "api/state",
+        description:
+            "Rerun's state: which web viewer it frames (host:port or URL), what that viewer shows (default stream, a stream address, a recording URL or local .rrd), the frame URL, and whether the viewer is reachable",
+        role: "context",
+        handler: () => state(),
+    },
+    {
+        method: "POST",
+        path: "api/viewer",
+        description:
+            "Connect to a Rerun web viewer (the UI's host/port + Connect): host and port of `rerun --serve-web` (default port 9090), or url, a full viewer URL (its own ?url= is kept). Answers whether it is reachable",
+        params: {
+            host: { type: "string", description: "viewer host, e.g. localhost (or host:port)" },
+            port: { type: "string", description: "viewer web port (default 9090)" },
+            url: { type: "string", description: "a full http(s) viewer URL instead of host/port" },
+        },
+        handler: async (args) => {
+            const url = text(args.url)
+            if (url) {
+                if (!/^https?:\/\//i.test(url) || !URL.canParse(url)) {
+                    throw new HttpError(400, "url must be an http(s) URL of a Rerun web viewer")
+                }
+                viewer = { url }
+            } else {
+                const host = text(args.host) || "localhost"
+                const port = text(args.port) || (host.includes(":") ? "" : "9090")
+                if (/^https?:\/\//i.test(host)) {
+                    viewer = { url: host }
+                } else if (!/^[\w.\-\[\]:]+$/.test(host) || (port && !/^\d{1,5}$/.test(port))) {
+                    throw new HttpError(400, "host must be a hostname (or host:port) and port a number")
+                } else {
+                    viewer = { host, port }
+                }
+            }
+            reachable = null
+            await save()
+            changed()
+            await probe()
+            return state()
+        },
+    },
+    {
+        method: "POST",
+        path: "api/open",
+        description:
+            "Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app)",
+        params: {
+            url: { type: "string", description: "rerun+http(s):// stream address, or http(s) URL of a .rrd" },
+            path: { type: "string", description: "absolute path of a local .rrd file" },
+        },
+        handler: async (args) => {
+            const url = text(args.url)
+            const path = text(args.path)
+            if (url && path) {
+                throw new HttpError(400, "give url or path, not both")
+            }
+            if (path) {
+                if (!path.startsWith("/") || !path.endsWith(".rrd")) {
+                    throw new HttpError(400, "path must be an absolute path to a .rrd file")
+                }
+                try {
+                    if (!(await Deno.stat(path)).isFile) {
+                        throw new Error()
+                    }
+                } catch {
+                    throw new HttpError(404, `no such file: ${path}`)
+                }
+                source = { kind: "file", path }
+            } else if (/^rerun\+https?:\/\//i.test(url)) {
+                source = { kind: "stream", address: url }
+            } else if (/^https?:\/\//i.test(url) && URL.canParse(url)) {
+                source = { kind: "url", address: url }
+            } else {
+                throw new HttpError(
+                    400,
+                    "url must be rerun+http(s)://… (a stream) or http(s)://… (a .rrd), or give path",
+                )
+            }
+            await save()
+            changed()
+            return state()
+        },
+    },
+    {
+        method: "DELETE",
+        path: "api/open",
+        description: "Go back to the viewer's default live stream (rerun+http://<viewer host>:9876/proxy)",
+        handler: async () => {
+            source = { kind: "default" }
+            await save()
+            changed()
+            return state()
+        },
+    },
+    {
+        method: "POST",
+        path: "api/reconnect",
+        description: "Check the viewer again now and reload its frame (when it was restarted or shows stale data)",
+        handler: async () => {
+            reload++
+            changed()
+            const ok = await probe()
+            return { ...state(), reachable: ok }
+        },
+    },
+    {
+        method: "GET",
+        path: "api/recording",
+        description:
+            "The local .rrd opened with api/open path, as bytes (what the viewer loads; CORS-open so a viewer on another port can fetch it)",
+        params: { name: { type: "string", description: "file name, only for the viewer's display" } },
+        handler: async () => {
+            if (source.kind !== "file") {
+                throw new HttpError(404, "no local recording is open (api/open with path)")
+            }
+            const file = await Deno.open(source.path).catch(() => {
+                throw new HttpError(404, `the recording is gone: ${source.kind === "file" ? source.path : ""}`)
+            })
+            const { size } = await file.stat()
+            return new Response(file.readable, {
+                headers: {
+                    "content-type": "application/octet-stream",
+                    "content-length": String(size),
+                    "access-control-allow-origin": "*",
+                },
+            })
+        },
+    },
+]

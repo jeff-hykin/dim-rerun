@@ -1,0 +1,133 @@
+html, body {
+    height: 100%;
+    margin: 0;
+}
+body.science {
+    display: flex;
+    flex-direction: column;
+}
+
+.frame-wrap {
+    flex: 1;
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
+}
+#viewer {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+}
+
+/* floating control panel, top-center over the viewer */
+.panel {
+    position: absolute;
+    z-index: 5;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 20px);
+    padding: 8px 13px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-md);
+    transition: padding 0.15s ease;
+}
+.panel .title {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+}
+.panel input {
+    font-size: 13px;
+    padding: 6px 9px;
+}
+#host {
+    width: 140px;
+}
+#port {
+    width: 68px;
+}
+#connect {
+    padding: 8px 14px;
+}
+.stat {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted-fg);
+}
+.stat .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted-fg);
+    flex: none;
+}
+.stat .dot.on {
+    background: var(--ok);
+    box-shadow: 0 0 6px var(--ok);
+}
+.stat .dot.err {
+    background: var(--danger);
+}
+
+/* collapsed = connected: just a compact pill (title + status), click to edit */
+.panel.collapsed {
+    cursor: pointer;
+    gap: 8px;
+    padding: 7px 13px;
+}
+.panel.collapsed label,
+.panel.collapsed input,
+.panel.collapsed #connect {
+    display: none;
+}
+
+/* centered message; opaque so nothing behind it can bleed through */
+.overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    color: var(--muted-fg);
+    padding: 24px;
+    background: var(--bg);
+}
+.overlay.show {
+    display: flex;
+}
+.overlay .big {
+    font-size: 14px;
+    color: var(--fg);
+}
+.overlay code {
+    font-family: var(--mono);
+    color: color-mix(in oklch, var(--info) 80%, var(--fg));
+}
+#root {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+#source {
+    width: 220px;
+}
+.panel .dim-alert {
+    font-size: 11px;
+    padding: 4px 8px;
+}
+.panel.collapsed #source {
+    display: none;
+}

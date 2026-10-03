@@ -1,22 +1,28 @@
 {
-    description = "dim-rerun: the Rerun web viewer as a dimOS Desktop app";
-
+    description = "Rerun (dim-rerun), a dimOS Desktop app: `nix build .#dimosApp` → bin/dimos-app-server (Deno backend + built React frontend)";
     inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
-
+    nixConfig = {
+        extra-substituters = [ "https://dimos-desktop.cachix.org" ];
+        extra-trusted-public-keys = [ "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ=" ];
+    };
     outputs = { self, nixpkgs }:
         let
             systems = [ "aarch64-darwin" "x86_64-darwin" "x86_64-linux" "aarch64-linux" ];
-            forAllSystems = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
+            forAll = f: nixpkgs.lib.genAttrs systems (system: f nixpkgs.legacyPackages.${system});
         in {
-            packages = forAllSystems (pkgs: {
-                # a static page, served at /apps/<name>/; the rail icon rides along for the page's own use
-                dimosApp = pkgs.runCommand "dim-rerun" { } ''
-                    cp -r ${self}/dim/apps/rerun/frontend $out
-                    chmod -R u+w $out
-                    cp ${self}/icon.svg $out/icon.svg
-                    test -s $out/index.html
-                    ${pkgs.libxml2}/bin/xmllint --noout $out/icon.svg
+            packages = forAll (pkgs: rec {
+                frontend = pkgs.buildNpmPackage {
+                    pname = "rerun-frontend";
+                    version = "0.1.0";
+                    src = ./frontend;
+                    # `nix build .#frontend` prints the right hash when package-lock.json changes
+                    npmDepsHash = "sha256-brElOtMPxIUk3jCtu9qidZVh3L+ZkomQe7V7ydr2dYA=";
+                    installPhase = "cp -r dist $out";
+                };
+                dimosApp = pkgs.writeShellScriptBin "dimos-app-server" ''
+                    exec ${pkgs.deno}/bin/deno run -A --no-lock ${./backend}/main.ts --frontend ${frontend} "$@"
                 '';
+                default = dimosApp;
             });
         };
 }
