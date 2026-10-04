@@ -36,11 +36,6 @@ body.science {
     box-shadow: var(--shadow-md);
     transition: padding 0.15s ease;
 }
-.panel .title {
-    font-size: 13px;
-    font-weight: 600;
-    letter-spacing: 0.04em;
-}
 .panel input {
     font-size: 13px;
     padding: 6px 9px;
@@ -113,7 +108,7 @@ body.science {
 }
 .overlay code {
     font-family: var(--mono);
-    color: color-mix(in oklch, var(--info) 80%, var(--fg));
+    color: var(--info);
 }
 #root {
     flex: 1;
@@ -133,16 +128,4 @@ body.science {
 }
 .panel.collapsed .dim-theme-toggle {
     display: none;
-}
-.panel .title {
-    font-family: var(--display);
-    font-weight: 400;
-}
-body.science:not(.dark) .panel .title {
-    font-size: 18px;
-    letter-spacing: 0;
-}
-body.science.dark .panel .title {
-    font-size: 11px;
-    letter-spacing: 0.12em;
 }

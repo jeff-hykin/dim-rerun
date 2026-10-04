@@ -82,7 +82,7 @@ export function App() {
                 className={`panel dim-panel glass${collapsed ? " collapsed" : ""}`}
                 onClick={() => collapsed && setExpanded(true)}
             >
-                <span className="title">Rerun</span>
+                <span className="title dim-title">Rerun</span>
                 <label className="dim-label">host</label>
                 <input
                     className="dim-input dim-mono"
