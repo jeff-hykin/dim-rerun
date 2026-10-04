@@ -4,6 +4,7 @@
 // show here too.
 import { useEffect, useState } from "react"
 import { call, events } from "./api.ts"
+import { ThemeToggle } from "./ThemeToggle.tsx"
 
 type State = {
     viewer: { host: string; port: string } | { url: string }
@@ -136,6 +137,7 @@ export function App() {
                     </span>
                 </span>
                 {error && <span className="dim-alert danger">{error}</span>}
+                <ThemeToggle />
             </div>
         </div>
     )
