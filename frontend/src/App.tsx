@@ -13,6 +13,8 @@ type State = {
     frameUrl: string
     reachable: boolean | null
     reload: number
+    /** the rerun CLI this app can start a viewer with, null when there's none */
+    rerun: string | null
 }
 
 /** the backend's "@app/" prefix → this page's own absolute base, so a viewer on another origin can fetch it */
@@ -40,6 +42,14 @@ export function App() {
     }, [])
 
     const act = (promise: Promise<unknown>) => promise.then(() => setError(null), (e) => setError(e.message))
+    const [starting, setStarting] = useState(false)
+    const startViewer = () => {
+        setStarting(true)
+        call<{ started: boolean; reason?: string }>("POST", "api/viewer/start").then(
+            (result) => setError(result.reason ?? null),
+            (e) => setError(e.message),
+        ).finally(() => setStarting(false))
+    }
     const connect = () => {
         setExpanded(false)
         act(call("POST", "api/viewer", { host, port }))
@@ -73,9 +83,22 @@ export function App() {
             <div className={`overlay${connected ? "" : " show"}`}>
                 <div className="big">{state?.reachable === false ? "Connecting…" : "Looking for a Rerun viewer…"}</div>
                 <div>
-                    Waiting for a Rerun web viewer at <code>{state?.viewerOrigin ?? "…"}</code>. Start one with{" "}
-                    <code>rerun --serve-web</code> (web on :9090). This keeps retrying.
+                    Waiting for a Rerun web viewer at{" "}
+                    <code>{state?.viewerOrigin ?? "…"}</code>. This keeps retrying; opening a recording starts one here.
                 </div>
+                {state?.rerun
+                    ? (
+                        <button type="button" className="dim-btn primary" disabled={starting} onClick={startViewer}>
+                            {starting ? "Starting…" : "Start a viewer"}
+                        </button>
+                    )
+                    : (
+                        <div>
+                            No <code>rerun</code> here: <code>pip install rerun-sdk</code>, then{" "}
+                            <code>rerun --serve-web</code>.
+                        </div>
+                    )}
+                {error && <div className="dim-alert warn">{error}</div>}
             </div>
 
             <div

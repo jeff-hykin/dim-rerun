@@ -1,7 +1,7 @@
 {
     "tasks": {
         "dev": "deno run -A --watch backend/main.ts --port 8787",
-        "test": "deno test -A backend/",
+        "test": "DIM_RERUN_NO_START=1 deno test -A backend/",
         "check": "deno check backend/main.ts && deno task check-endpoints",
         "check-endpoints": "deno run -A scripts/check_endpoints.ts"
     },

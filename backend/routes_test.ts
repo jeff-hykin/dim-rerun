@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "@std/assert"
 import { handle } from "./http.ts"
-import { DESCRIPTION, routes } from "./routes.ts"
+import { DESCRIPTION, routes, stopStartedViewer } from "./routes.ts"
 
 const call = async (method: string, path: string, body?: unknown) => {
     const response = await handle(
@@ -62,4 +62,30 @@ Deno.test("api/open: a stream, a recording URL, a local file; DELETE goes back t
 Deno.test("agent.json lists every route", async () => {
     const { json } = await call("GET", "agent.json")
     assertEquals(json.endpoints.length, routes.length)
+})
+
+Deno.test("api/open starts a viewer on this machine when none answers (a stand-in rerun CLI)", async () => {
+    const dir = await Deno.makeTempDir()
+    const fake = `${dir}/rerun`
+    // `rerun --serve-web --web-viewer-port <port> ...` → any web server on that port will do
+    await Deno.writeTextFile(fake, `#!/bin/sh\nexec python3 -m http.server --bind 127.0.0.1 "$3"\n`)
+    await Deno.chmod(fake, 0o755)
+    const rrd = `${dir}/a.rrd`
+    await Deno.writeTextFile(rrd, "RRF2")
+    const listener = Deno.listen({ port: 0 })
+    const port = String((listener.addr as Deno.NetAddr).port)
+    listener.close()
+    Deno.env.set("RERUN_BIN", fake)
+    Deno.env.delete("DIM_RERUN_NO_START")
+    try {
+        assertEquals((await call("POST", "api/viewer", { host: "127.0.0.1", port })).json.reachable, false)
+        const opened = await call("POST", "api/open", { path: rrd })
+        assertEquals(opened.json.viewerStart, { started: true })
+        assertEquals((await call("GET", "api/state")).json.reachable, true)
+        // already up: nothing more to start
+        assertEquals((await call("POST", "api/viewer/start")).json.started, false)
+    } finally {
+        await stopStartedViewer()
+        Deno.env.delete("RERUN_BIN")
+    }
 })

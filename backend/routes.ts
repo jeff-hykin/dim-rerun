@@ -84,7 +84,9 @@ export function state() {
         reachable,
         checkedAt,
         reload,
-        hint: "start a viewer with `rerun --serve-web` (web viewer on :9090, data proxy on :9876)",
+        hint:
+            "opening something starts a viewer here (`rerun --serve-web`, web viewer on :9090, data proxy on :9876); POST api/viewer/start does it now",
+        rerun: findRerun(),
     }
 }
 
@@ -125,6 +127,91 @@ export async function probe(): Promise<boolean> {
 export function startProbing(everyMs = 3000) {
     probe()
     return setInterval(probe, everyMs)
+}
+
+// ── a viewer of our own ──
+// Opening something while the framed viewer is down (the usual case: nobody started `rerun --serve-web`) starts one,
+// when the target is this machine and a `rerun` CLI is here: $RERUN_BIN, PATH, ~/.cargo/bin, the dimos venv.
+let started: { child: Deno.ChildProcess; port: string } | null = null
+
+export function findRerun(): string | null {
+    const home = Deno.env.get("HOME") ?? ""
+    const dimosPython = Deno.env.get("DIMOS_PYTHON")
+    const candidates = [
+        Deno.env.get("RERUN_BIN"),
+        ...(Deno.env.get("PATH") ?? "").split(":").filter(Boolean).map((dir) => `${dir}/rerun`),
+        `${home}/.cargo/bin/rerun`,
+        "/opt/homebrew/bin/rerun",
+        "/usr/local/bin/rerun",
+        dimosPython ? `${dimosPython.replace(/\/[^/]+$/, "")}/rerun` : undefined,
+    ]
+    for (const candidate of candidates) {
+        try {
+            if (candidate && Deno.statSync(candidate).isFile) {
+                return candidate
+            }
+        } catch {
+            // not here
+        }
+    }
+    return null
+}
+
+const isLocal = (v: Viewer) =>
+    !("url" in v) && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(v.host.split(":")[0])
+
+/** Starts `rerun --serve-web` on the viewer's port when it isn't answering; waits up to 15 s for it. */
+export async function ensureViewer(): Promise<{ started: boolean; reason?: string }> {
+    if (await probe()) {
+        return { started: false }
+    }
+    if (Deno.env.get("DIM_RERUN_NO_START")) {
+        return { started: false, reason: "starting a viewer is off (DIM_RERUN_NO_START)" }
+    }
+    if (!isLocal(viewer)) {
+        return { started: false, reason: `the viewer is on another machine (${viewerOrigin()}): start it there` }
+    }
+    const rerun = findRerun()
+    if (!rerun) {
+        return { started: false, reason: "no rerun CLI here (pip install rerun-sdk, or cargo install rerun-cli)" }
+    }
+    const port = "url" in viewer ? "9090" : viewer.port || "9090"
+    if (!started || started.port !== port) {
+        const child = new Deno.Command(rerun, {
+            args: ["--serve-web", "--web-viewer-port", port, "--port", String(DATA_PORT)],
+            stdin: "null",
+            stdout: "null",
+            stderr: "null",
+        }).spawn()
+        started = { child, port }
+        child.status.then(() => {
+            if (started?.child === child) {
+                started = null
+            }
+        })
+    }
+    for (let i = 0; i < 30; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 500))
+        if (await probe()) {
+            reload++
+            changed()
+            return { started: true }
+        }
+    }
+    return { started: false, reason: `started ${rerun} --serve-web, but :${port} didn't answer in 15 s` }
+}
+
+/** main.ts: the viewer this app started goes with it */
+export async function stopStartedViewer() {
+    const child = started?.child
+    if (child) {
+        try {
+            child.kill("SIGTERM")
+        } catch {
+            // already gone
+        }
+        await child.status
+    }
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value.trim() : value === undefined ? "" : String(value))
@@ -177,7 +264,7 @@ export const routes: Route[] = [
         method: "POST",
         path: "api/open",
         description:
-            "Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app)",
+            "Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun --serve-web) first when none is answering",
         params: {
             url: { type: "string", description: "rerun+http(s):// stream address, or http(s) URL of a .rrd" },
             path: { type: "string", description: "absolute path of a local .rrd file" },
@@ -212,8 +299,16 @@ export const routes: Route[] = [
             }
             await save()
             changed()
-            return state()
+            const viewerStart = await ensureViewer()
+            return { ...state(), viewerStart }
         },
+    },
+    {
+        method: "POST",
+        path: "api/viewer/start",
+        description:
+            "Start a Rerun web viewer on this machine (`rerun --serve-web` on the viewer port) when the framed one isn't answering; api/open does this by itself",
+        handler: async () => ({ ...(await ensureViewer()), ...state() }),
     },
     {
         method: "DELETE",

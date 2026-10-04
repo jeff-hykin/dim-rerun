@@ -31,7 +31,8 @@ agent:
           path: api/open
           description: >-
               Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd
-              recording URL; or path = a local .rrd file (served to the viewer by this app)
+              recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun
+              --serve-web) first when none is answering
           params:
               url:
                   type: string
@@ -39,6 +40,11 @@ agent:
               path:
                   type: string
                   description: absolute path of a local .rrd file
+        - method: POST
+          path: api/viewer/start
+          description: >-
+              Start a Rerun web viewer on this machine (`rerun --serve-web` on the viewer port) when the framed one isn't
+              answering; api/open does this by itself
         - method: DELETE
           path: api/open
           description: 'Go back to the viewer''s default live stream (rerun+http://<viewer host>:9876/proxy)'
@@ -55,7 +61,6 @@ agent:
                   type: string
                   required: true
                   description: the file's name (the viewer goes by its .rrd extension)
-# prebuilt cross builds Desktop downloads (if a cache above has them) before building dimosApp, per machine type
 nix:
     cache:
         aarch64-linux:

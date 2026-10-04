@@ -1,7 +1,7 @@
 // dimos-app-server: this app's API and its built frontend on the unix socket Desktop gives (--socket), else a port.
 // Desktop's flags: --socket --desktop-url --zenoh-web-url --zenoh-connect --dimos-dir --dimos-python (docs/apps.md).
 import { eventsSocket, handle } from "./http.ts"
-import { DESCRIPTION, routes, startProbing } from "./routes.ts"
+import { DESCRIPTION, routes, startProbing, stopStartedViewer } from "./routes.ts"
 
 function flag(name: string): string | undefined {
     const index = Deno.args.indexOf(`--${name}`)
@@ -42,6 +42,13 @@ async function serve(request: Request): Promise<Response> {
 }
 
 startProbing()
+// a viewer this app started stops with it (Desktop stops an app with SIGTERM)
+for (const signal of ["SIGTERM", "SIGINT"] as const) {
+    Deno.addSignalListener(signal, async () => {
+        await stopStartedViewer()
+        Deno.exit(0)
+    })
+}
 
 const socket = flag("socket")
 if (socket) {
