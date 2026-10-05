@@ -7,8 +7,10 @@ body.science {
     flex-direction: column;
 }
 
+/* the viewer (and Rerun's own timeline at its bottom) ends above Desktop's dock */
 .frame-wrap {
     flex: 1;
+    margin-bottom: var(--dim-inset-bottom);
     position: relative;
     background: var(--bg);
     overflow: hidden;
@@ -143,4 +145,17 @@ body.science {
         flex: 1;
         min-width: 0;
     }
+}
+
+.nothing-sending {
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    align-items: center;
+    max-width: calc(100% - 32px);
+}
+.nothing-sending > span {
+    flex: 1;
 }
