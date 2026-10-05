@@ -1,5 +1,6 @@
-// dimos-app-server: this app's API and its built frontend on the unix socket Desktop gives (--socket), else a port.
-// Desktop's flags: --socket --desktop-url --zenoh-web-url --zenoh-connect --dimos-dir --dimos-python (docs/apps.md).
+// dimos-app-server: this app's API and its built frontend on the unix socket Desktop gives, else a port. What Desktop
+// passes: the DIMOS_APP env var, one JSON object (docs/apps.md; dimos_app.ts, with older Desktops' flags as fallback).
+import { dimosApp } from "./dimos_app.ts"
 import { eventsSocket, handle } from "./http.ts"
 import { DESCRIPTION, routes, startProbing, stopStartedViewer } from "./routes.ts"
 
@@ -50,7 +51,7 @@ for (const signal of ["SIGTERM", "SIGINT"] as const) {
     })
 }
 
-const socket = flag("socket")
+const socket = dimosApp.socket
 if (socket) {
     try {
         Deno.removeSync(socket)

@@ -5,6 +5,7 @@
 // file this server hands out at api/recording). This server keeps the target, checks the viewer is reachable (so the
 // page never frames a connection error) and pushes every change on api/events/ws.
 import { HttpError, publishEvent, type Route } from "./http.ts"
+import { dimosApp } from "./dimos_app.ts"
 
 export const DESCRIPTION =
     "Rerun: shows a Rerun web viewer (rerun --serve-web) inside Desktop, on a live stream or a recording (.rrd)"
@@ -17,7 +18,7 @@ const PROBE_TIMEOUT_MS = 2500
 type Viewer = { host: string; port: string } | { url: string }
 type Source = { kind: "default" } | { kind: "stream" | "url"; address: string } | { kind: "file"; path: string }
 
-const dataDir = Deno.env.get("DIMOS_APP_DATA")
+const dataDir = dimosApp.dataDir
 const savedFile = dataDir ? `${dataDir}/target.json` : null
 
 function load(): { viewer: Viewer; source: Source } {
@@ -136,7 +137,7 @@ let started: { child: Deno.ChildProcess; port: string } | null = null
 
 export function findRerun(): string | null {
     const home = Deno.env.get("HOME") ?? ""
-    const dimosPython = Deno.env.get("DIMOS_PYTHON")
+    const dimosPython = dimosApp.dimosPython
     const candidates = [
         Deno.env.get("RERUN_BIN"),
         ...(Deno.env.get("PATH") ?? "").split(":").filter(Boolean).map((dir) => `${dir}/rerun`),
