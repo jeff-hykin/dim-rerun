@@ -3,8 +3,9 @@
 // The page frames a Rerun web viewer (`rerun --serve-web`, :9090) in an iframe, pointed at a source with `?url=`: by
 // default the viewer host's gRPC data proxy (rerun+http://<host>:9876/proxy), or a recording (.rrd URL, or a local .rrd
 // file this server hands out at api/recording). This server keeps the target, checks the viewer is reachable (so the
-// page never frames a connection error) and pushes every change on api/events/ws.
-import { HttpError, publishEvent, type Route } from "./http.ts"
+// page never frames a connection error) and says when it changes: `stateChanged("state")` (frontend topic state/state,
+// through Desktop's relay; the page re-GETs api/state).
+import { HttpError, type Route, stateChanged } from "./http.ts"
 import { dimosApp } from "./dimos_app.ts"
 
 export const DESCRIPTION =
@@ -92,7 +93,7 @@ export function state() {
 }
 
 function changed() {
-    publishEvent({ type: "state", ...state() })
+    stateChanged("state")
 }
 
 async function save() {

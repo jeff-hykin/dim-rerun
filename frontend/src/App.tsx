@@ -1,9 +1,10 @@
 // Rerun page: frames a Rerun web viewer (inner iframe) once the backend says it's reachable, so a down server never
 // shows the browser's "unable to connect" page; once connected the controls collapse into a pill (click to edit).
-// Every action is a backend endpoint (api.ts); state arrives from api/state + api/events/ws, so the agent's changes
+// Every action is a backend endpoint (api.ts); state is api/state, re-read when the backend says it changed (useBackendState: zenoh topic state/state), so the agent's changes
 // show here too.
 import { useEffect, useState } from "react"
-import { call, events } from "./api.ts"
+import { call } from "./api.ts"
+import { useBackendState } from "./dim-app/react.js"
 import { ThemeToggle } from "./ThemeToggle.tsx"
 
 type State = {
@@ -24,7 +25,7 @@ function resolve(frameUrl: string): string {
 }
 
 export function App() {
-    const [state, setState] = useState<State | null>(null)
+    const [state, { error: stateError }] = useBackendState<State>("api/state")
     const [host, setHost] = useState("")
     const [port, setPort] = useState("")
     const [source, setSource] = useState("")
@@ -32,14 +33,12 @@ export function App() {
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        const show = (next: State) => {
-            setState(next)
-            setHost("url" in next.viewer ? next.viewer.url : next.viewer.host)
-            setPort("url" in next.viewer ? "" : next.viewer.port)
+        if (state) {
+            setHost("url" in state.viewer ? state.viewer.url : state.viewer.host)
+            setPort("url" in state.viewer ? "" : state.viewer.port)
         }
-        call<State>("GET", "api/state").then(show, (e) => setError(e.message))
-        return events((event) => event.type === "state" && show(event as unknown as State))
-    }, [])
+    }, [state])
+    useEffect(() => setError(stateError?.message ?? null), [stateError])
 
     const act = (promise: Promise<unknown>) => promise.then(() => setError(null), (e) => setError(e.message))
     const [starting, setStarting] = useState(false)

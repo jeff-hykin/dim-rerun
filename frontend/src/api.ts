@@ -13,34 +13,3 @@ export async function call<T = unknown>(method: string, path: string, body?: unk
     }
     return data as T
 }
-
-/** The backend's events (api/events/ws), reconnecting with backoff; returns an unsubscribe. */
-export function events(onEvent: (event: Record<string, unknown>) => void): () => void {
-    let socket: WebSocket | null = null
-    let delay = 500
-    let stopped = false
-    const open = () => {
-        const url = new URL("api/events/ws", location.href)
-        url.protocol = url.protocol.replace("http", "ws")
-        socket = new WebSocket(url)
-        socket.onopen = () => (delay = 500)
-        socket.onmessage = (message) => {
-            try {
-                onEvent(JSON.parse(message.data))
-            } catch {
-                // not JSON
-            }
-        }
-        socket.onclose = () => {
-            if (!stopped) {
-                setTimeout(open, delay)
-                delay = Math.min(delay * 2, 10_000)
-            }
-        }
-    }
-    open()
-    return () => {
-        stopped = true
-        socket?.close()
-    }
-}
