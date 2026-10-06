@@ -128,9 +128,6 @@ body.science {
 .panel.collapsed #source {
     display: none;
 }
-.panel.collapsed .dim-theme-toggle {
-    display: none;
-}
 
 /* phone: the connect bar wraps onto a second line (a card, not a pill) instead of running off the screen */
 @media (max-width: 600px) {

@@ -7,7 +7,6 @@ import { call } from "./api.ts"
 import { EmptyState, useBackendState } from "./dim-app/react.js"
 import { openApp } from "./dim-app/desktop.js"
 import { getZenoh } from "./dim-app/zenoh.js"
-import { ThemeToggle } from "./ThemeToggle.tsx"
 
 type State = {
     viewer: { host: string; port: string } | { url: string }
@@ -221,7 +220,6 @@ export function App() {
                     </span>
                 </span>
                 {error && <span className="dim-alert danger">{error}</span>}
-                <ThemeToggle />
             </div>
         </div>
     )
