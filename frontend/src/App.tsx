@@ -4,9 +4,9 @@
 // show here too.
 import { useEffect, useState } from "react"
 import { call } from "./api.ts"
-import { EmptyState, useBackendState } from "./dim-app/react.js"
-import { openApp } from "./dim-app/desktop.js"
-import { getZenoh } from "./dim-app/zenoh.js"
+import { EmptyState, useBackendState } from "./dim-app/source/react.js"
+import { openApp } from "./dim-app/source/desktop.js"
+import { getZenoh } from "./dim-app/source/zenoh.js"
 
 type State = {
     viewer: { host: string; port: string } | { url: string }
