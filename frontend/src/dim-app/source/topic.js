@@ -3,9 +3,16 @@
 
 /** `<topic…>` chunks the relay accepts (letters, digits, `-`, `_`, `.`); `*` / `**` allowed for subscribing. */
 export function checkTopic(topic, { wildcards = false } = {}) {
-    const chunk = wildcards ? /^([A-Za-z0-9_.-]+|\*|\*\*)$/ : /^[A-Za-z0-9_.-]+$/
-    if (typeof topic !== "string" || !topic.split("/").every((part) => chunk.test(part))) {
-        throw new TypeError(`dim-app: bad topic ${JSON.stringify(topic)} (chunks of letters, digits, - _ .)`)
-    }
-    return topic
+  const chunk = wildcards ? /^([A-Za-z0-9_.-]+|\*|\*\*)$/ : /^[A-Za-z0-9_.-]+$/;
+  if (
+    typeof topic !== "string" ||
+    !topic.split("/").every((part) => chunk.test(part))
+  ) {
+    throw new TypeError(
+      `dim-app: bad topic ${
+        JSON.stringify(topic)
+      } (chunks of letters, digits, - _ .)`,
+    );
+  }
+  return topic;
 }

@@ -64,6 +64,16 @@ provides:
               path:
                   type: string
                   description: absolute path of a local .rrd file
+        - method: GET
+          path: api/viewer/grpc
+          description: >-
+              Whether the gRPC server the viewer shows answers and lets a viewer at origin read it (Rerun allows only
+              localhost origins unless started with --cors-allow-origin)
+          params:
+              origin:
+                  type: string
+                  required: true
+                  description: "the viewer's origin as the browser reaches it, e.g. http://100.64.0.1:9090"
         - method: POST
           path: api/viewer/start
           description: >-

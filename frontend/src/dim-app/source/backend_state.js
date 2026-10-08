@@ -12,8 +12,8 @@
 // ("api/library?sort=name": its key is the path's last segment, "library", unless `key` says otherwise). React pages
 // use react.js's useBackendState, which wraps this.
 
-import { checkTopic } from "./topic.js"
-import { getZenoh } from "./zenoh.js"
+import { checkTopic } from "./topic.js";
+import { getZenoh } from "./zenoh.js";
 
 /**
  * `{ url, key, topic }` for a source: a key (no "/" or "?") or an app-relative URL.
@@ -21,12 +21,15 @@ import { getZenoh } from "./zenoh.js"
  * @param {{ key?: string, url?: string, topic?: string }} [options]
  */
 export function resolveSource(source, options = {}) {
-    const isUrl = /[/?]/.test(source)
-    const key = options.key ?? (isUrl ? source.split("?")[0].replace(/\/+$/, "").split("/").pop() : source)
-    const url = options.url ?? (isUrl ? source : `api/state/${key}`)
-    const topic = options.topic ?? `state/${key}`
-    checkTopic(topic)
-    return { url, key, topic }
+  const isUrl = /[/?]/.test(source);
+  const key = options.key ??
+    (isUrl
+      ? source.split("?")[0].replace(/\/+$/, "").split("/").pop()
+      : source);
+  const url = options.url ?? (isUrl ? source : `api/state/${key}`);
+  const topic = options.topic ?? `state/${key}`;
+  checkTopic(topic);
+  return { url, key, topic };
 }
 
 /**
@@ -39,116 +42,119 @@ export function resolveSource(source, options = {}) {
  * @returns {{ refresh(): Promise<void>, stop(): void }}
  */
 export function watchBackendState(source, onChange, options = {}) {
-    const { url, key, topic } = resolveSource(source, options)
-    const debounceMs = options.debounceMs ?? 100
-    const zenoh = options.zenoh ?? getZenoh()
-    const fetchImpl = options.fetch ?? ((...args) => globalThis.fetch(...args))
-    const parse = options.parse ?? ((response) => response.json())
-    const href = new URL(url, options.href ?? globalThis.location?.href).href
-    let snapshot = { data: undefined, loading: true, error: null, version: null }
-    let seenVersion = -Infinity // the newest version an event announced
-    let loadedVersion = -Infinity // the newest version a finished GET is known to include
-    let timer = null
-    let inFlight = null
-    let dirty = false
-    let stopped = false
-    let waiters = []
+  const { url, key, topic } = resolveSource(source, options);
+  const debounceMs = options.debounceMs ?? 100;
+  const zenoh = options.zenoh ?? getZenoh();
+  const fetchImpl = options.fetch ?? ((...args) => globalThis.fetch(...args));
+  const parse = options.parse ?? ((response) => response.json());
+  const href = new URL(url, options.href ?? globalThis.location?.href).href;
+  let snapshot = { data: undefined, loading: true, error: null, version: null };
+  let seenVersion = -Infinity; // the newest version an event announced
+  let loadedVersion = -Infinity; // the newest version a finished GET is known to include
+  let timer = null;
+  let inFlight = null;
+  let dirty = false;
+  let stopped = false;
+  let waiters = [];
 
-    const schedule = (delay) => {
-        if (stopped) {
-            return
-        }
-        if (inFlight) {
-            dirty = true
-            return
-        }
-        if (timer === null) {
-            timer = setTimeout(() => {
-                timer = null
-                load()
-            }, delay)
-        }
+  const schedule = (delay) => {
+    if (stopped) {
+      return;
     }
-
-    const load = () => {
-        dirty = false
-        const target = seenVersion
-        inFlight = (async () => {
-            let next
-            try {
-                const response = await fetchImpl(href, options.init)
-                if (!response.ok) {
-                    await response.body?.cancel()
-                    throw new Error(`GET ${url}: HTTP ${response.status}`)
-                }
-                const data = await parse(response)
-                loadedVersion = Math.max(loadedVersion, target)
-                next = {
-                    data,
-                    loading: false,
-                    error: null,
-                    version: Number.isFinite(loadedVersion) ? loadedVersion : null,
-                }
-            } catch (error) {
-                next = { ...snapshot, loading: false, error }
-            }
-            inFlight = null
-            if (stopped) {
-                return
-            }
-            snapshot = next
-            try {
-                onChange(snapshot)
-            } catch (error) {
-                console.error(`[dim-app] watchBackendState(${key}) onChange threw`, error)
-            }
-            if (dirty || seenVersion > loadedVersion) {
-                schedule(debounceMs)
-            } else {
-                const done = waiters
-                waiters = []
-                done.forEach((resolve) => resolve())
-            }
-        })()
+    if (inFlight) {
+      dirty = true;
+      return;
     }
-
-    const offEvent = zenoh.subscribeFrontend(topic, (event) => {
-        const version = typeof event?.version === "number" ? event.version : null
-        if (version === null) {
-            schedule(debounceMs) // no version: every event means "changed"
-            return
-        }
-        if (version <= loadedVersion || version <= seenVersion) {
-            return // already have it, or already fetching for a newer one
-        }
-        seenVersion = version
-        schedule(debounceMs)
-    })
-    const offReconnect = zenoh.onReconnect(() => schedule(0))
-    load()
-
-    return {
-        refresh() {
-            if (stopped) {
-                return Promise.resolve()
-            }
-            const settled = new Promise((resolve) => waiters.push(resolve))
-            clearTimeout(timer)
-            timer = null
-            if (inFlight) {
-                dirty = true
-            } else {
-                load()
-            }
-            return settled
-        },
-        stop() {
-            stopped = true
-            clearTimeout(timer)
-            offEvent()
-            offReconnect()
-            waiters.forEach((resolve) => resolve())
-            waiters = []
-        },
+    if (timer === null) {
+      timer = setTimeout(() => {
+        timer = null;
+        load();
+      }, delay);
     }
+  };
+
+  const load = () => {
+    dirty = false;
+    const target = seenVersion;
+    inFlight = (async () => {
+      let next;
+      try {
+        const response = await fetchImpl(href, options.init);
+        if (!response.ok) {
+          await response.body?.cancel();
+          throw new Error(`GET ${url}: HTTP ${response.status}`);
+        }
+        const data = await parse(response);
+        loadedVersion = Math.max(loadedVersion, target);
+        next = {
+          data,
+          loading: false,
+          error: null,
+          version: Number.isFinite(loadedVersion) ? loadedVersion : null,
+        };
+      } catch (error) {
+        next = { ...snapshot, loading: false, error };
+      }
+      inFlight = null;
+      if (stopped) {
+        return;
+      }
+      snapshot = next;
+      try {
+        onChange(snapshot);
+      } catch (error) {
+        console.error(
+          `[dim-app] watchBackendState(${key}) onChange threw`,
+          error,
+        );
+      }
+      if (dirty || seenVersion > loadedVersion) {
+        schedule(debounceMs);
+      } else {
+        const done = waiters;
+        waiters = [];
+        done.forEach((resolve) => resolve());
+      }
+    })();
+  };
+
+  const offEvent = zenoh.subscribeFrontend(topic, (event) => {
+    const version = typeof event?.version === "number" ? event.version : null;
+    if (version === null) {
+      schedule(debounceMs); // no version: every event means "changed"
+      return;
+    }
+    if (version <= loadedVersion || version <= seenVersion) {
+      return; // already have it, or already fetching for a newer one
+    }
+    seenVersion = version;
+    schedule(debounceMs);
+  });
+  const offReconnect = zenoh.onReconnect(() => schedule(0));
+  load();
+
+  return {
+    refresh() {
+      if (stopped) {
+        return Promise.resolve();
+      }
+      const settled = new Promise((resolve) => waiters.push(resolve));
+      clearTimeout(timer);
+      timer = null;
+      if (inFlight) {
+        dirty = true;
+      } else {
+        load();
+      }
+      return settled;
+    },
+    stop() {
+      stopped = true;
+      clearTimeout(timer);
+      offEvent();
+      offReconnect();
+      waiters.forEach((resolve) => resolve());
+      waiters = [];
+    },
+  };
 }

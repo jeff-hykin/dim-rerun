@@ -159,6 +159,35 @@ export async function probe(): Promise<boolean> {
     return ok
 }
 
+/** Whether the gRPC server the viewer is told to show answers, and lets a viewer at `origin` (as the browser reaches
+ * it) read it: Rerun's gRPC server allows only localhost origins unless started with --cors-allow-origin, so from
+ * another machine the viewer loads but gets no data. null = not a gRPC source (a recording). */
+export async function grpcCheck(
+    origin: string,
+): Promise<{ address: string | null; reachable: boolean | null; allowed: boolean | null }> {
+    const address = sourceAddress()
+    if (!address || !/^rerun\+https?:\/\//i.test(address)) {
+        return { address, reachable: null, allowed: null }
+    }
+    const base = address.replace(/^rerun\+/i, "").replace(`//${HOST}`, "//127.0.0.1").replace(/\/proxy\/?$/, "")
+    try {
+        const response = await fetch(`${base}/rerun.sdk_comms.v1alpha1.MessageProxyService/ReadMessages`, {
+            method: "OPTIONS",
+            headers: {
+                origin,
+                "access-control-request-method": "POST",
+                "access-control-request-headers": "content-type,x-grpc-web",
+            },
+            signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+        })
+        await response.body?.cancel()
+        const allow = response.headers.get("access-control-allow-origin")
+        return { address, reachable: true, allowed: allow === "*" || allow === origin }
+    } catch {
+        return { address, reachable: false, allowed: null }
+    }
+}
+
 /** main.ts keeps the reachability fresh while the app runs */
 export function startProbing(everyMs = 3000) {
     probe()
@@ -215,7 +244,18 @@ export async function ensureViewer(): Promise<{ started: boolean; reason?: strin
     const grpcPort = "port" in grpc ? grpc.port : GRPC_PORT
     if (!started || started.port !== port) {
         const child = new Deno.Command(rerun, {
-            args: ["--serve-web", "--web-viewer-port", port, "--port", grpcPort, "--bind", "0.0.0.0"],
+            // its gRPC server lets the viewer read it from any host (Rerun allows only localhost origins by default)
+            args: [
+                "--serve-web",
+                "--web-viewer-port",
+                port,
+                "--port",
+                grpcPort,
+                "--bind",
+                "0.0.0.0",
+                "--cors-allow-origin",
+                `http://*:${port}`,
+            ],
             stdin: "null",
             stdout: "null",
             stderr: "null",
@@ -354,6 +394,20 @@ export const routes: Route[] = [
             const viewerStart = await ensureViewer()
             return { ...state(), viewerStart }
         },
+    },
+    {
+        method: "GET",
+        path: "api/viewer/grpc",
+        description:
+            "Whether the gRPC server the viewer shows answers and lets a viewer at origin read it (Rerun allows only localhost origins unless started with --cors-allow-origin)",
+        params: {
+            origin: {
+                type: "string",
+                required: true,
+                description: "the viewer's origin as the browser reaches it, e.g. http://100.64.0.1:9090",
+            },
+        },
+        handler: (args) => grpcCheck(text(args.origin)),
     },
     {
         method: "POST",

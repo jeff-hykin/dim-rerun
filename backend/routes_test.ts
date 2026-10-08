@@ -111,3 +111,26 @@ Deno.test("api/open starts a viewer on this machine when none answers (a stand-i
         Deno.env.delete("RERUN_BIN")
     }
 })
+
+Deno.test("api/viewer/grpc: a gRPC server that lets this viewer origin read it, one that doesn't, none", async () => {
+    const allowOnly = "http://localhost:9090"
+    const server = Deno.serve({ port: 0, onListen: () => {} }, (request) =>
+        new Response(null, {
+            headers: request.headers.get("origin") === allowOnly ? { "access-control-allow-origin": allowOnly } : {},
+        }))
+    const { port } = server.addr as Deno.NetAddr
+    await call("DELETE", "api/open")
+    await call("POST", "api/viewer", { port: "9090", grpc: String(port) })
+    const check = async (origin: string) =>
+        (await call("GET", `api/viewer/grpc?origin=${encodeURIComponent(origin)}`)).json
+    assertEquals(await check(allowOnly), {
+        address: `rerun+http://@host:${port}/proxy`,
+        reachable: true,
+        allowed: true,
+    })
+    assertEquals((await check("http://100.64.0.1:9090")).allowed, false)
+    await server.shutdown()
+    assertEquals((await check(allowOnly)).reachable, false)
+    assertEquals((await call("GET", "api/viewer/grpc")).status, 400)
+    await call("POST", "api/viewer", { port: "9090", grpc: "9877" })
+})
