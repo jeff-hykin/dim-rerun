@@ -7,6 +7,11 @@ uses:
         - GET /api/apps
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
     "@zenoh-gateway": ">=0.5 <0.6"
+# the page checks this browser reaches the Rerun web viewer before framing it (a no-cors fetch of its origin): a port on
+# Desktop's machine as the browser reached Desktop, or any host/port the settings name, so any http(s) origin
+connects:
+    - http://*:*
+    - https://*:*
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
@@ -21,28 +26,35 @@ provides:
         - method: GET
           path: api/state
           description: >-
-              Rerun's state: which web viewer it frames (host:port or URL), what that viewer shows (default stream, a stream
-              address, a recording URL or local .rrd), the frame URL, and whether the viewer is reachable
+              Rerun's state: which web viewer it frames (port on Desktop's machine, host:port or URL) and its gRPC server
+              (settings), what that viewer shows (default stream, a stream address, a recording URL or local .rrd), the
+              frame URL (@host = the host the browser reached Desktop at), and whether the viewer is reachable
           role: context
         - method: POST
           path: api/viewer
           description: >-
-              Connect to a Rerun web viewer (the UI's host/port + Connect): host and port of `rerun --serve-web` (default port
-              9090), or url, a full viewer URL (its own ?url= is kept). Answers whether it is reachable
+              The app's settings: which Rerun web viewer it frames and the gRPC server that viewer shows. Viewer: port
+              (default 9090) of `rerun --serve-web` on Desktop's machine, or host + port of one elsewhere, or url, a full
+              viewer URL (its own ?url= is kept). grpc: the Rerun gRPC server to show, a port on the viewer's machine
+              (default 9877, where dimos's Rerun bridge serves) or a rerun+http(s)://…/proxy URL. Saved; answers whether
+              the viewer is reachable
           params:
               host:
                   type: string
-                  description: "viewer host, e.g. localhost (or host:port)"
+                  description: "viewer host (or host:port); empty = Desktop's machine"
               port:
                   type: string
                   description: viewer web port (default 9090)
               url:
                   type: string
                   description: a full http(s) viewer URL instead of host/port
+              grpc:
+                  type: string
+                  description: "the gRPC server it shows: a port (default 9877) or rerun+http(s)://host:port/proxy"
         - method: POST
           path: api/open
           description: >-
-              Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd
+              Show something in the viewer: url = a live stream address (rerun+http://host:9877/proxy) or an http(s) .rrd
               recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun
               --serve-web) first when none is answering
           params:
@@ -59,7 +71,8 @@ provides:
               answering; api/open does this by itself
         - method: DELETE
           path: api/open
-          description: 'Go back to the viewer''s default live stream (rerun+http://<viewer host>:9876/proxy)'
+          description: >-
+              Go back to the viewer's default live stream (the settings' gRPC server, rerun+http://<viewer host>:9877/proxy)
         - method: POST
           path: api/reconnect
           description: Check the viewer again now and reload its frame (when it was restarted or shows stale data)

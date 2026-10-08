@@ -1,45 +1,64 @@
 // Every Rerun action, as an endpoint (http.ts). The UI calls these; so can Desktop's agent.
 //
 // The page frames a Rerun web viewer (`rerun --serve-web`, :9090) in an iframe, pointed at a source with `?url=`: by
-// default the viewer host's gRPC data proxy (rerun+http://<host>:9876/proxy), or a recording (.rrd URL, or a local .rrd
-// file this server hands out at api/recording). This server keeps the target, checks the viewer is reachable (so the
-// page never frames a connection error) and says when it changes: `stateChanged("state")` (frontend topic state/state,
-// through Desktop's relay; the page re-GETs api/state).
+// default the viewer host's gRPC server (rerun+http://<host>:9877/proxy, where dimos's Rerun bridge serves), or a
+// recording (.rrd URL, or a local .rrd file this server hands out at api/recording). The viewer is on Desktop's
+// machine unless the settings name another host, and the browser reaches it the way it reached Desktop: frame URLs say
+// HOST and the page puts in its own location.hostname (never localhost, which is the browser's machine). This server
+// keeps the target, checks the viewer is reachable (so the page never frames a connection error) and says when it
+// changes: `stateChanged("state")` (frontend topic state/state, through Desktop's relay; the page re-GETs api/state).
 import { HttpError, type Route, stateChanged } from "./http.ts"
 import { dimosApp } from "./dimos_app.ts"
 
 export const DESCRIPTION =
     "Rerun: shows a Rerun web viewer (rerun --serve-web) inside Desktop, on a live stream or a recording (.rrd)"
 
-export const DATA_PORT = 9876
+export const VIEWER_PORT = "9090"
+/** dimos's Rerun bridge serves gRPC here (dimos/visualization/rerun/constants.py RERUN_GRPC_PORT) */
+export const GRPC_PORT = "9877"
 /** the page puts its own absolute base (…/apps/<name>/) in place of this, for sources this server serves */
 export const SELF = "@app/"
+/** the page puts the host the browser reached Desktop at (location.hostname) in place of this */
+export const HOST = "@host"
 const PROBE_TIMEOUT_MS = 2500
 
+/** host "" = Desktop's machine, as the browser reaches it */
 type Viewer = { host: string; port: string } | { url: string }
+/** the gRPC server the viewer shows by default: a port on the viewer's machine, or a rerun+http(s) URL */
+type Grpc = { port: string } | { url: string }
 type Source = { kind: "default" } | { kind: "stream" | "url"; address: string } | { kind: "file"; path: string }
 
 const dataDir = dimosApp.dataDir
 const savedFile = dataDir ? `${dataDir}/target.json` : null
 
-function load(): { viewer: Viewer; source: Source } {
+const LOOPBACK = ["", "localhost", "127.0.0.1", "::1", "[::1]"]
+
+function load(): { viewer: Viewer; grpc: Grpc; source: Source } {
+    const saved: { viewer?: Viewer; grpc?: Grpc; source?: Source } = {}
     try {
         if (savedFile) {
-            return JSON.parse(Deno.readTextFileSync(savedFile))
+            Object.assign(saved, JSON.parse(Deno.readTextFileSync(savedFile)))
         }
     } catch {
         // first run
     }
-    return { viewer: { host: "localhost", port: "9090" }, source: { kind: "default" } }
+    return {
+        viewer: saved.viewer ?? { host: "", port: VIEWER_PORT },
+        grpc: saved.grpc ?? { port: GRPC_PORT },
+        source: saved.source ?? { kind: "default" },
+    }
 }
 
-let { viewer, source } = load()
+let { viewer, grpc, source } = load()
 let reachable: boolean | null = null
 let checkedAt: string | null = null
 /** bumped by api/reconnect: pages reload the viewer frame */
 let reload = 0
 
-/** the viewer's plain http origin, what the probe checks */
+/** Desktop's machine: a viewer there is reached at the browser's HOST, and this server starts and probes it locally */
+export const isLocal = (v: Viewer = viewer) => !("url" in v) && LOOPBACK.includes(v.host.split(":")[0])
+
+/** the viewer's plain http origin as the browser reaches it (HOST for Desktop's machine) */
 export function viewerOrigin(v: Viewer = viewer): string {
     if ("url" in v) {
         try {
@@ -48,18 +67,32 @@ export function viewerOrigin(v: Viewer = viewer): string {
             return v.url
         }
     }
-    return `http://${v.host}${v.port ? `:${v.port}` : ""}`
+    return `http://${isLocal(v) ? HOST : v.host}${v.port ? `:${v.port}` : ""}`
+}
+
+/** what this server probes: Desktop's machine is 127.0.0.1 from here */
+function probeOrigin(): string {
+    return viewerOrigin().replace(`//${HOST}`, "//127.0.0.1")
 }
 
 function viewerHost(v: Viewer): string {
-    return "url" in v ? (URL.canParse(v.url) ? new URL(v.url).hostname : "localhost") : v.host.split(":")[0]
+    return "url" in v
+        ? (URL.canParse(v.url) ? new URL(v.url).hostname : HOST)
+        : isLocal(v)
+        ? HOST
+        : v.host.split(":")[0]
+}
+
+/** the gRPC server's address, rerun+http://<viewer host>:<port>/proxy for a port */
+export function grpcAddress(v: Viewer = viewer, g: Grpc = grpc): string {
+    return "url" in g ? g.url : `rerun+http://${viewerHost(v)}:${g.port}/proxy`
 }
 
 /** what the viewer is told to show (its `?url=`); SELF-prefixed for a local file */
 export function sourceAddress(v: Viewer = viewer, s: Source = source): string | null {
     switch (s.kind) {
         case "default":
-            return "url" in v && v.url.includes("?") ? null : `rerun+http://${viewerHost(v)}:${DATA_PORT}/proxy`
+            return "url" in v && v.url.includes("?") ? null : grpcAddress(v)
         case "file":
             return `${SELF}api/recording/${encodeURIComponent(s.path.split("/").pop() ?? "recording.rrd")}`
         default:
@@ -80,6 +113,7 @@ export function frameUrl(v: Viewer = viewer, s: Source = source): string {
 export function state() {
     return {
         viewer,
+        grpc,
         viewerOrigin: viewerOrigin(),
         source: { ...source, address: sourceAddress() },
         frameUrl: frameUrl(),
@@ -87,7 +121,7 @@ export function state() {
         checkedAt,
         reload,
         hint:
-            "opening something starts a viewer here (`rerun --serve-web`, web viewer on :9090, data proxy on :9876); POST api/viewer/start does it now",
+            `${HOST} is the host the browser reached Desktop at. Opening something starts a viewer on Desktop's machine (\`rerun --serve-web\`, web viewer on :${VIEWER_PORT}, gRPC on :${GRPC_PORT}); POST api/viewer/start does it now`,
         rerun: findRerun(),
     }
 }
@@ -98,13 +132,13 @@ function changed() {
 
 async function save() {
     if (savedFile) {
-        await Deno.writeTextFile(savedFile, JSON.stringify({ viewer, source }))
+        await Deno.writeTextFile(savedFile, JSON.stringify({ viewer, grpc, source }))
     }
 }
 
 /** Is the viewer's web server answering? (any HTTP response counts) */
 export async function probe(): Promise<boolean> {
-    const origin = viewerOrigin()
+    const origin = probeOrigin()
     let ok = false
     try {
         const response = await fetch(origin, { signal: AbortSignal.timeout(PROBE_TIMEOUT_MS) })
@@ -113,7 +147,7 @@ export async function probe(): Promise<boolean> {
     } catch {
         ok = false
     }
-    if (origin !== viewerOrigin()) {
+    if (origin !== probeOrigin()) {
         return ok // the target changed meanwhile: that change probes for itself
     }
     const before = reachable
@@ -159,9 +193,6 @@ export function findRerun(): string | null {
     return null
 }
 
-const isLocal = (v: Viewer) =>
-    !("url" in v) && ["localhost", "127.0.0.1", "::1", "[::1]"].includes(v.host.split(":")[0])
-
 /** Starts `rerun --serve-web` on the viewer's port when it isn't answering; waits up to 15 s for it. */
 export async function ensureViewer(): Promise<{ started: boolean; reason?: string }> {
     if (await probe()) {
@@ -177,10 +208,14 @@ export async function ensureViewer(): Promise<{ started: boolean; reason?: strin
     if (!rerun) {
         return { started: false, reason: "no rerun CLI here (pip install rerun-sdk, or cargo install rerun-cli)" }
     }
-    const port = "url" in viewer ? "9090" : viewer.port || "9090"
+    const port = "url" in viewer ? VIEWER_PORT : viewer.port || VIEWER_PORT
+    // every interface, so a browser on another machine reaches it the way it reaches Desktop; gRPC on the settings'
+    // port (dimos's bridge port by default: a bridge started later sends to it; one already there keeps it, and the web
+    // viewer still starts)
+    const grpcPort = "port" in grpc ? grpc.port : GRPC_PORT
     if (!started || started.port !== port) {
         const child = new Deno.Command(rerun, {
-            args: ["--serve-web", "--web-viewer-port", port, "--port", String(DATA_PORT)],
+            args: ["--serve-web", "--web-viewer-port", port, "--port", grpcPort, "--bind", "0.0.0.0"],
             stdin: "null",
             stdout: "null",
             stderr: "null",
@@ -231,11 +266,15 @@ export const routes: Route[] = [
         method: "POST",
         path: "api/viewer",
         description:
-            "Connect to a Rerun web viewer (the UI's host/port + Connect): host and port of `rerun --serve-web` (default port 9090), or url, a full viewer URL (its own ?url= is kept). Answers whether it is reachable",
+            "The app's settings: which Rerun web viewer it frames and the gRPC server that viewer shows. Viewer: port (default 9090) of `rerun --serve-web` on Desktop's machine, or host + port of one elsewhere, or url, a full viewer URL (its own ?url= is kept). grpc: the Rerun gRPC server to show, a port on the viewer's machine (default 9877, where dimos's Rerun bridge serves) or a rerun+http(s)://…/proxy URL. Saved; answers whether the viewer is reachable",
         params: {
-            host: { type: "string", description: "viewer host, e.g. localhost (or host:port)" },
+            host: { type: "string", description: "viewer host (or host:port); empty = Desktop's machine" },
             port: { type: "string", description: "viewer web port (default 9090)" },
             url: { type: "string", description: "a full http(s) viewer URL instead of host/port" },
+            grpc: {
+                type: "string",
+                description: "the gRPC server it shows: a port (default 9877) or rerun+http(s)://host:port/proxy",
+            },
         },
         handler: async (args) => {
             const url = text(args.url)
@@ -245,15 +284,26 @@ export const routes: Route[] = [
                 }
                 viewer = { url }
             } else {
-                const host = text(args.host) || "localhost"
-                const port = text(args.port) || (host.includes(":") ? "" : "9090")
+                // host:port is split, so Desktop's machine keeps its port when its name becomes HOST
+                const [, hostPart, portPart] = text(args.host).match(/^([^:\[\]]*):(\d{1,5})$/) ??
+                    [, text(args.host), ""]
+                const host = hostPart
+                const port = text(args.port) || portPart || VIEWER_PORT
                 if (/^https?:\/\//i.test(host)) {
                     viewer = { url: host }
-                } else if (!/^[\w.\-\[\]:]+$/.test(host) || (port && !/^\d{1,5}$/.test(port))) {
+                } else if ((host && !/^[\w.\-\[\]:]+$/.test(host)) || (port && !/^\d{1,5}$/.test(port))) {
                     throw new HttpError(400, "host must be a hostname (or host:port) and port a number")
                 } else {
-                    viewer = { host, port }
+                    viewer = { host: LOOPBACK.includes(host) ? "" : host, port }
                 }
+            }
+            const grpcArg = text(args.grpc)
+            if (/^\d{1,5}$/.test(grpcArg)) {
+                grpc = { port: grpcArg }
+            } else if (/^rerun\+https?:\/\//i.test(grpcArg) && URL.canParse(grpcArg)) {
+                grpc = { url: grpcArg }
+            } else if (grpcArg) {
+                throw new HttpError(400, "grpc must be a port number or rerun+http(s)://host:port/proxy")
             }
             reachable = null
             await save()
@@ -266,7 +316,7 @@ export const routes: Route[] = [
         method: "POST",
         path: "api/open",
         description:
-            "Show something in the viewer: url = a live stream address (rerun+http://host:9876/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun --serve-web) first when none is answering",
+            "Show something in the viewer: url = a live stream address (rerun+http://host:9877/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun --serve-web) first when none is answering",
         params: {
             url: { type: "string", description: "rerun+http(s):// stream address, or http(s) URL of a .rrd" },
             path: { type: "string", description: "absolute path of a local .rrd file" },
@@ -315,7 +365,8 @@ export const routes: Route[] = [
     {
         method: "DELETE",
         path: "api/open",
-        description: "Go back to the viewer's default live stream (rerun+http://<viewer host>:9876/proxy)",
+        description:
+            "Go back to the viewer's default live stream (the settings' gRPC server, rerun+http://<viewer host>:9877/proxy)",
         handler: async () => {
             source = { kind: "default" }
             await save()

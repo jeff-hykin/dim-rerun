@@ -1,5 +1,6 @@
-// Rerun page: frames a Rerun web viewer (inner iframe) once the backend says it's reachable, so a down server never
-// shows the browser's "unable to connect" page; once connected the controls collapse into a pill (click to edit).
+// Rerun page: frames a Rerun web viewer (inner iframe) once the backend says it's running and this browser can reach it
+// (a no-cors fetch, dimos.yaml connects:), so a down or unreachable viewer never shows the browser's "unable to connect"
+// page but a message with what to do; once connected the settings collapse into a pill (click to edit).
 // Every action is a backend endpoint (api.ts); state is api/state, re-read when the backend says it changed (useBackendState: zenoh topic state/state), so the agent's changes
 // show here too.
 import { useEffect, useState } from "react"
@@ -9,7 +10,9 @@ import { openApp } from "./dim-app/source/desktop.js"
 import { getZenoh } from "./dim-app/source/zenoh.js"
 
 type State = {
+    /** host "" = Desktop's machine */
     viewer: { host: string; port: string } | { url: string }
+    grpc: { port: string } | { url: string }
     viewerOrigin: string
     source: { kind: string; address: string | null; path?: string }
     frameUrl: string
@@ -19,24 +22,77 @@ type State = {
     rerun: string | null
 }
 
-/** the backend's "@app/" prefix → this page's own absolute base, so a viewer on another origin can fetch it */
-function resolve(frameUrl: string): string {
+/** the backend's "@app/" → this page's own absolute base, so a viewer on another origin can fetch it; "@host" → the
+ * host this browser reached Desktop at (Desktop's machine: never localhost, which is the browser's own) */
+function resolve(url: string): string {
     const self = new URL(".", location.href).href
-    return frameUrl.replace(encodeURIComponent("@app/"), encodeURIComponent(self))
+    return url.replace(encodeURIComponent("@app/"), encodeURIComponent(self))
+        .replaceAll("@host", location.hostname)
+        .replaceAll(encodeURIComponent("@host"), encodeURIComponent(location.hostname))
+}
+
+/** the settings' viewer field: a port (Desktop's machine), host:port, or a URL */
+function viewerText(viewer: State["viewer"]): string {
+    return "url" in viewer ? viewer.url : viewer.host ? `${viewer.host}:${viewer.port}` : viewer.port
+}
+
+function viewerArgs(text: string): Record<string, string> {
+    const value = text.trim()
+    return /^\d+$/.test(value) ? { port: value } : /^https?:\/\//i.test(value) ? { url: value } : { host: value }
+}
+
+/** Whether this browser reaches `origin` (any answer counts): true, false, null = not known yet, or "unchecked" when
+ * the page's CSP forbids the check (then only the backend's counts). Re-checks every 5 s while it can't, and on `again`. */
+function useBrowserReach(origin: string | null, again: number): boolean | null | "unchecked" {
+    const [reach, setReach] = useState<boolean | null | "unchecked">(null)
+    useEffect(() => {
+        setReach(null)
+        if (!origin) {
+            return
+        }
+        let live = true
+        let timer: number | undefined
+        let blocked = false
+        const onViolation = (e: SecurityPolicyViolationEvent) => {
+            if (e.blockedURI.startsWith(origin)) {
+                blocked = true
+            }
+        }
+        document.addEventListener("securitypolicyviolation", onViolation)
+        const check = () =>
+            fetch(origin, { mode: "no-cors", cache: "no-store", signal: AbortSignal.timeout(4000) }).then(
+                () => live && setReach(true),
+                () => {
+                    if (live) {
+                        setReach(blocked ? "unchecked" : false)
+                        if (!blocked) {
+                            timer = setTimeout(check, 5000)
+                        }
+                    }
+                },
+            )
+        check()
+        return () => {
+            live = false
+            clearTimeout(timer)
+            document.removeEventListener("securitypolicyviolation", onViolation)
+        }
+    }, [origin, again])
+    return reach
 }
 
 export function App() {
     const [state, { error: stateError }] = useBackendState<State>("api/state")
-    const [host, setHost] = useState("")
-    const [port, setPort] = useState("")
+    const [viewerField, setViewerField] = useState("")
+    const [grpcField, setGrpcField] = useState("")
     const [source, setSource] = useState("")
     const [expanded, setExpanded] = useState(false)
     const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
         if (state) {
-            setHost("url" in state.viewer ? state.viewer.url : state.viewer.host)
-            setPort("url" in state.viewer ? "" : state.viewer.port)
+            setViewerField(viewerText(state.viewer))
+            setGrpcField("url" in state.grpc ? state.grpc.url : state.grpc.port)
         }
     }, [state])
     useEffect(() => setError(stateError?.message ?? null), [stateError])
@@ -67,10 +123,16 @@ export function App() {
             (e) => setError(e.message),
         ).finally(() => setStarting(false))
     }
-    const connect = () => {
+    const save = () => {
         setExpanded(false)
-        act(call("POST", "api/viewer", { host, port }))
+        act(call("POST", "api/viewer", { ...viewerArgs(viewerField), grpc: grpcField.trim() }))
     }
+    const [again, setAgain] = useState(0)
+    const retry = () => {
+        setAgain((n) => n + 1)
+        act(call("POST", "api/reconnect"))
+    }
+    const openSettings = () => setExpanded(true)
     const open = () => {
         const value = source.trim()
         act(
@@ -82,9 +144,71 @@ export function App() {
         )
     }
 
-    const connected = state?.reachable === true
-    const collapsed = connected && !expanded
+    const origin = state ? resolve(state.viewerOrigin) : null
+    // the backend sees the viewer running; this browser checks it can reach it too (another machine may not)
+    const reach = useBrowserReach(state?.reachable ? origin : null, again + (state?.reload ?? 0))
+    const unreachable = state?.reachable === true && reach === false
+    const connected = state?.reachable === true && (reach === true || reach === "unchecked")
+    const local = !!state && !("url" in state.viewer) && !state.viewer.host
+    const collapsed = !expanded
     const src = connected && state ? resolve(state.frameUrl) : undefined
+    const settingsAction = { label: "Settings", onClick: openSettings }
+    const empty = !state && stateError
+        ? {
+            testId: "onboard-backend-down",
+            label: "Server not answering",
+            tone: "warn" as const,
+            title: "The Rerun app's server isn't answering",
+            body: "Restarting the app usually fixes it: close it with ✕ and open it again.",
+            actions: [{ label: "Try again", onClick: () => location.reload() }],
+        }
+        : unreachable
+        ? {
+            testId: "viewer-unreachable",
+            label: "Can't reach the viewer",
+            tone: "warn" as const,
+            title: "This browser can't reach the Rerun viewer",
+            body: local
+                ? `A Rerun viewer is running on Desktop's computer, but this browser gets no answer from ${origin}. A firewall on that computer may block port ${
+                    "port" in state.viewer ? state.viewer.port : ""
+                }, or the viewer only listens on that computer itself: restart it there with rerun --serve-web --bind 0.0.0.0. Or point this app at another viewer port in Settings.`
+                : `This browser gets no answer from ${origin}. Check that the viewer's machine is on and reachable from here (same network or tailnet, port open), or change the viewer in Settings.`,
+            actions: [{ label: "Try again", onClick: retry }, settingsAction],
+        }
+        : state && state.reachable === false && !state.rerun && local
+        ? {
+            testId: "onboard-no-rerun",
+            label: "Rerun not installed",
+            tone: "warn" as const,
+            title: "Rerun isn't installed",
+            body:
+                `There's no rerun command on this computer. Install it into dimOS's Python (pip install rerun-sdk), or launch a blueprint with a Rerun bridge, which starts a viewer for you. Waiting for a viewer at ${origin}.`,
+            actions: [
+                { label: "Open the Launcher", app: "launcher" },
+                settingsAction,
+            ],
+        }
+        : state && state.reachable === false
+        ? {
+            testId: "onboard-no-viewer",
+            label: "No viewer",
+            title: "No Rerun viewer is running",
+            body: local
+                ? `Start one here; blueprints with a Rerun bridge send to it. This page keeps looking at ${origin}, so a viewer started elsewhere shows up by itself. Running your own? Set its port in Settings.`
+                : `Nothing answers at ${origin}. Start rerun --serve-web on that machine, or change the viewer in Settings. This page keeps looking, so it shows up by itself.`,
+            actions: local
+                ? [{ label: starting ? "Starting…" : "Start a viewer", onClick: startViewer }, settingsAction]
+                : [{ label: "Try again", onClick: retry }, settingsAction],
+        }
+        : {
+            testId: "onboard-looking",
+            label: "Looking for a viewer",
+            busy: true,
+            title: "Looking for a Rerun viewer",
+            body: `Checking ${origin ?? "…"}`,
+            actions: [settingsAction],
+        }
+
     return (
         <div className="frame-wrap">
             {src && (
@@ -98,43 +222,7 @@ export function App() {
             )}
 
             <div className={`overlay${connected ? "" : " show"}`}>
-                {!connected && (
-                    <EmptyState
-                        {...(!state && stateError
-                            ? {
-                                testId: "onboard-backend-down",
-                                label: "Server not answering",
-                                tone: "warn" as const,
-                                title: "The Rerun app's server isn't answering",
-                                body: "Restarting the app usually fixes it: close it with ✕ and open it again.",
-                                actions: [{ label: "Try again", onClick: () => location.reload() }],
-                            }
-                            : state && !state.rerun
-                            ? {
-                                testId: "onboard-no-rerun",
-                                label: "Rerun not installed",
-                                tone: "warn" as const,
-                                title: "Rerun isn't installed",
-                                body:
-                                    `There's no rerun command on this computer. Install it into dimOS's Python (pip install rerun-sdk), or launch a blueprint with a Rerun bridge, which starts a viewer for you. Waiting for a viewer at ${state.viewerOrigin}.`,
-                                actions: [{
-                                    label: "Open the Launcher",
-                                    app: "launcher",
-                                }],
-                            }
-                            : {
-                                testId: "onboard-no-viewer",
-                                label: state?.reachable === null || !state ? "Looking for a viewer" : "No viewer",
-                                busy: state?.reachable === null || !state,
-                                title: "No Rerun viewer is running",
-                                body:
-                                    `Start one here; blueprints with a Rerun bridge send to it. This page keeps looking at ${
-                                        state?.viewerOrigin ?? "…"
-                                    }, so a viewer started elsewhere shows up by itself.`,
-                                actions: [{ label: starting ? "Starting…" : "Start a viewer", onClick: startViewer }],
-                            })}
-                    />
-                )}
+                {!connected && <EmptyState {...empty} />}
                 {error && <div className="dim-alert warn">{error}</div>}
             </div>
 
@@ -163,41 +251,47 @@ export function App() {
             <div
                 className={`panel dim-panel glass${collapsed ? " collapsed" : ""}`}
                 onClick={() => collapsed && setExpanded(true)}
+                data-testid="settings"
             >
                 {/* inside Desktop, its window bar already names the app */}
-                {window.parent === window && <span className="title dim-title">Rerun</span>}
-                <label className="dim-label">host</label>
+                {self.parent === self && <span className="title dim-title">Rerun</span>}
+                <label className="dim-label" htmlFor="viewer-port" title="the Rerun web viewer (rerun --serve-web)">
+                    viewer
+                </label>
                 <input
                     className="dim-input dim-mono"
-                    id="host"
+                    id="viewer-port"
                     type="text"
                     spellCheck={false}
                     autoComplete="off"
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && connect()}
+                    placeholder="9090"
+                    title="a port on Desktop's computer (9090), host:port of another machine, or a viewer URL"
+                    value={viewerField}
+                    onChange={(e) => setViewerField(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && save()}
                 />
-                <label className="dim-label">port</label>
+                <label className="dim-label" htmlFor="grpc" title="the Rerun gRPC server the viewer shows">gRPC</label>
                 <input
                     className="dim-input dim-mono"
-                    id="port"
+                    id="grpc"
                     type="text"
-                    inputMode="numeric"
                     spellCheck={false}
                     autoComplete="off"
-                    value={port}
-                    onChange={(e) => setPort(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && connect()}
+                    placeholder="9877"
+                    title="the Rerun gRPC server to show: a port on the viewer's machine (9877 = dimos's Rerun bridge) or rerun+http://host:port/proxy"
+                    value={grpcField}
+                    onChange={(e) => setGrpcField(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && save()}
                 />
                 <button
                     type="button"
                     className="dim-btn primary"
-                    id="connect"
-                    onClick={(e) => (e.stopPropagation(), connect())}
+                    id="save"
+                    onClick={(e) => (e.stopPropagation(), save())}
                 >
-                    Connect
+                    Save
                 </button>
-                <label className="dim-label">open</label>
+                <label className="dim-label" htmlFor="source">open</label>
                 <input
                     className="dim-input dim-mono"
                     id="source"
@@ -211,14 +305,17 @@ export function App() {
                     onChange={(e) => setSource(e.target.value)}
                     onKeyDown={(e) => e.key === "Enter" && open()}
                 />
-                <span className="stat" title={state?.source.address ?? ""}>
+                <span className="stat" title={state?.source.address ? resolve(state.source.address) : ""}>
                     <span className={`dot${connected ? " on" : " err"}`} />
                     <span>
                         {connected
                             ? (state?.source.kind === "default" ? "connected" : `connected · ${state?.source.kind}`)
+                            : unreachable
+                            ? "unreachable"
                             : "waiting…"}
                     </span>
                 </span>
+                {collapsed && <span className="settings-link">⚙ Settings</span>}
                 {error && <span className="dim-alert danger">{error}</span>}
             </div>
         </div>

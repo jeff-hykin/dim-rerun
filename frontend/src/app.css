@@ -42,14 +42,18 @@ body.science {
     font-size: 13px;
     padding: 6px 9px;
 }
-#host {
-    width: 140px;
+#viewer-port {
+    width: 120px;
 }
-#port {
-    width: 68px;
+#grpc {
+    width: 120px;
 }
-#connect {
+#save {
     padding: 8px 14px;
+}
+.settings-link {
+    font-size: 12px;
+    color: var(--muted-fg);
 }
 .stat {
     display: flex;
@@ -82,7 +86,7 @@ body.science {
 }
 .panel.collapsed label,
 .panel.collapsed input,
-.panel.collapsed #connect {
+.panel.collapsed #save {
     display: none;
 }
 
@@ -138,7 +142,8 @@ body.science {
         flex-wrap: wrap;
         border-radius: var(--radius-lg);
     }
-    .panel:not(.collapsed) #host {
+    .panel:not(.collapsed) #viewer-port,
+    .panel:not(.collapsed) #grpc {
         flex: 1;
         min-width: 0;
     }

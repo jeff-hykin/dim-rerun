@@ -18,26 +18,48 @@ const call = async (method: string, path: string, body?: unknown) => {
     return { status: response!.status, json, headers: response!.headers }
 }
 
-Deno.test("api/state: localhost:9090 on the default stream", async () => {
+Deno.test("api/state: Desktop's machine (HOST, the browser's name for it) :9090 on dimos's gRPC :9877", async () => {
     const { json } = await call("GET", "api/state")
-    assertEquals(json.viewer, { host: "localhost", port: "9090" })
-    assertEquals(json.frameUrl, `http://localhost:9090/?url=${encodeURIComponent("rerun+http://localhost:9876/proxy")}`)
+    assertEquals([json.viewer, json.grpc], [{ host: "", port: "9090" }, { port: "9877" }])
+    assertEquals(json.viewerOrigin, "http://@host:9090")
+    assertEquals(json.frameUrl, `http://@host:9090/?url=${encodeURIComponent("rerun+http://@host:9877/proxy")}`)
     assertEquals((await call("GET", "api/states")).status, 404)
 })
 
 Deno.test("api/viewer: a reachable viewer (a stand-in server) and an unreachable one", async () => {
     const server = Deno.serve({ port: 0, onListen: () => {} }, () => new Response("rerun"))
     const { port } = server.addr as Deno.NetAddr
-    const up = await call("POST", "api/viewer", { host: "127.0.0.1", port: String(port) })
-    assertEquals(up.json.reachable, true)
-    assertEquals(up.json.viewerOrigin, `http://127.0.0.1:${port}`)
+    // localhost is Desktop's machine: the browser reaches it at HOST, this server probes 127.0.0.1
+    const up = await call("POST", "api/viewer", { host: "localhost", port: String(port) })
+    assertEquals([up.json.reachable, up.json.viewer], [true, { host: "", port: String(port) }])
+    assertEquals(up.json.viewerOrigin, `http://@host:${port}`)
+    assertEquals((await call("POST", "api/viewer", { host: `127.0.0.1:${port}` })).json.viewer.port, String(port))
     await server.shutdown()
     assertEquals((await call("POST", "api/reconnect")).json.reachable, false)
     assertEquals((await call("POST", "api/viewer", { host: "bad host!" })).status, 400)
     assertEquals((await call("POST", "api/viewer", { url: "ftp://x" })).status, 400)
     const full = await call("POST", "api/viewer", { url: "http://127.0.0.1:1/?url=rerun%2Bhttp%3A%2F%2Fx%3A1%2Fproxy" })
     assertEquals(full.json.frameUrl, "http://127.0.0.1:1/?url=rerun%2Bhttp%3A%2F%2Fx%3A1%2Fproxy")
-    await call("POST", "api/viewer", { host: "localhost", port: "9090" })
+    const robot = await call("POST", "api/viewer", { host: "robot.local", port: "9091" })
+    assertEquals(
+        robot.json.frameUrl,
+        `http://robot.local:9091/?url=${encodeURIComponent("rerun+http://robot.local:9877/proxy")}`,
+    )
+    await call("POST", "api/viewer", { port: "9090" })
+})
+
+Deno.test("api/viewer grpc: the gRPC server the viewer shows, a port or a rerun+http URL", async () => {
+    const port = await call("POST", "api/viewer", { port: "9090", grpc: "9876" })
+    assertEquals(port.json.grpc, { port: "9876" })
+    assert(port.json.frameUrl.endsWith(encodeURIComponent("rerun+http://@host:9876/proxy")))
+    const url = await call("POST", "api/viewer", { port: "9090", grpc: "rerun+http://robot:9877/proxy" })
+    assert(url.json.frameUrl.endsWith(encodeURIComponent("rerun+http://robot:9877/proxy")))
+    // left out: kept
+    assertEquals((await call("POST", "api/viewer", { port: "9090" })).json.grpc, {
+        url: "rerun+http://robot:9877/proxy",
+    })
+    assertEquals((await call("POST", "api/viewer", { grpc: "http://x" })).status, 400)
+    await call("POST", "api/viewer", { port: "9090", grpc: "9877" })
 })
 
 Deno.test("api/open: a stream, a recording URL, a local file; DELETE goes back to the default", async () => {
