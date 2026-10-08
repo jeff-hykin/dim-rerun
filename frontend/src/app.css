@@ -1,163 +1,163 @@
 html, body {
-  height: 100%;
-  margin: 0;
+    height: 100%;
+    margin: 0;
 }
 body.science {
-  display: flex;
-  flex-direction: column;
+    display: flex;
+    flex-direction: column;
 }
 
 /* the viewer (and Rerun's own timeline at its bottom) ends above Desktop's dock */
 .frame-wrap {
-  flex: 1;
-  margin-bottom: var(--dim-inset-bottom);
-  position: relative;
-  background: var(--bg);
-  overflow: hidden;
+    flex: 1;
+    margin-bottom: var(--dim-inset-bottom);
+    position: relative;
+    background: var(--bg);
+    overflow: hidden;
 }
 #viewer {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  display: block;
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
 }
 
 /* floating control panel, top-center over the viewer */
 .panel {
-  position: absolute;
-  z-index: 5;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  max-width: calc(100% - 20px);
-  padding: 8px 13px;
-  border-radius: 999px;
-  box-shadow: var(--shadow-md);
-  transition: padding 0.15s ease;
+    position: absolute;
+    z-index: 5;
+    top: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    max-width: calc(100% - 20px);
+    padding: 8px 13px;
+    border-radius: 999px;
+    box-shadow: var(--shadow-md);
+    transition: padding 0.15s ease;
 }
 .panel input {
-  font-size: 13px;
-  padding: 6px 9px;
+    font-size: 13px;
+    padding: 6px 9px;
 }
 #viewer-port {
-  width: 120px;
+    width: 120px;
 }
 #grpc {
-  width: 120px;
+    width: 120px;
 }
 #save {
-  padding: 8px 14px;
+    padding: 8px 14px;
 }
 .settings-link {
-  font-size: 12px;
-  color: var(--muted-fg);
+    font-size: 12px;
+    color: var(--muted-fg);
 }
 .stat {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted-fg);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--muted-fg);
 }
 .stat .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--muted-fg);
-  flex: none;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--muted-fg);
+    flex: none;
 }
 .stat .dot.on {
-  background: var(--ok);
-  box-shadow: 0 0 6px var(--ok);
+    background: var(--ok);
+    box-shadow: 0 0 6px var(--ok);
 }
 .stat .dot.err {
-  background: var(--danger);
+    background: var(--danger);
 }
 
 /* collapsed = connected: just a compact pill (title + status), click to edit */
 .panel.collapsed {
-  cursor: pointer;
-  gap: 8px;
-  padding: 7px 13px;
+    cursor: pointer;
+    gap: 8px;
+    padding: 7px 13px;
 }
 .panel.collapsed label,
 .panel.collapsed input,
 .panel.collapsed #save {
-  display: none;
+    display: none;
 }
 
 /* centered message; opaque so nothing behind it can bleed through */
 .overlay {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-  color: var(--muted-fg);
-  padding: 24px;
-  background: var(--bg);
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-align: center;
+    color: var(--muted-fg);
+    padding: 24px;
+    background: var(--bg);
 }
 .overlay.show {
-  display: flex;
+    display: flex;
 }
 .overlay .big {
-  font-size: 14px;
-  color: var(--fg);
+    font-size: 14px;
+    color: var(--fg);
 }
 .overlay code {
-  font-family: var(--mono);
-  color: var(--info);
+    font-family: var(--mono);
+    color: var(--info);
 }
 #root {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 #source {
-  width: 220px;
+    width: 220px;
 }
 .panel .dim-alert {
-  font-size: 11px;
-  padding: 4px 8px;
+    font-size: 11px;
+    padding: 4px 8px;
 }
 .panel.collapsed #source {
-  display: none;
+    display: none;
 }
 
 /* phone: the connect bar wraps onto a second line (a card, not a pill) instead of running off the screen */
 @media (max-width: 600px) {
-  .panel:not(.collapsed) {
-    left: 10px;
-    right: 10px;
-    transform: none;
-    flex-wrap: wrap;
-    border-radius: var(--radius-lg);
-  }
-  .panel:not(.collapsed) #viewer-port,
-  .panel:not(.collapsed) #grpc {
-    flex: 1;
-    min-width: 0;
-  }
+    .panel:not(.collapsed) {
+        left: 10px;
+        right: 10px;
+        transform: none;
+        flex-wrap: wrap;
+        border-radius: var(--radius-lg);
+    }
+    .panel:not(.collapsed) #viewer-port,
+    .panel:not(.collapsed) #grpc {
+        flex: 1;
+        min-width: 0;
+    }
 }
 
 .nothing-sending {
-  position: absolute;
-  z-index: 4;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  align-items: center;
-  max-width: calc(100% - 32px);
+    position: absolute;
+    z-index: 4;
+    left: 50%;
+    bottom: 16px;
+    transform: translateX(-50%);
+    align-items: center;
+    max-width: calc(100% - 32px);
 }
 .nothing-sending > span {
-  flex: 1;
+    flex: 1;
 }
