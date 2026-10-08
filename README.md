@@ -9,7 +9,9 @@ dimos-desktop install https://github.com/jeff-hykin/dim-rerun
 ```
 
 It connects to the last-used viewer (default `localhost:9090`) and frames it once it answers, retrying until then; once
-connected the controls collapse into a pill (click it to edit).
+connected the controls collapse into a pill (click it to edit). The frame loads the viewer's files through this app
+(`viewer/`), so it shares Desktop's origin and Cmd+K (and the Alt shortcuts) still reach Desktop while the viewer has
+focus.
 
 ## Endpoints
 
@@ -25,7 +27,7 @@ agent drives the app like the UI does:
 | `POST api/reconnect`       | check the viewer again and reload the frame                                              |
 | `GET api/recording/{name}` | the opened local `.rrd`'s bytes (what the viewer fetches)                                |
 
-There is no `view` endpoint: the viewer is a cross-origin iframe, so neither the page nor the server can capture it.
+There is no `view` endpoint: the viewer draws into a GPU canvas the server can't capture.
 
 ## Development
 

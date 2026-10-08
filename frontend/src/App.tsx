@@ -19,10 +19,48 @@ type State = {
     rerun: string | null
 }
 
-/** the backend's "@app/" prefix → this page's own absolute base, so a viewer on another origin can fetch it */
+/** the backend's "@app/" prefix (the frame's own path, and a local recording in its ?url=) → this page's base */
 function resolve(frameUrl: string): string {
     const self = new URL(".", location.href).href
-    return frameUrl.replace(encodeURIComponent("@app/"), encodeURIComponent(self))
+    return frameUrl.replace(/^@app\//, self).replace(encodeURIComponent("@app/"), encodeURIComponent(self))
+}
+
+/**
+ * The viewer (same origin: this app serves its files) hands its shortcut keys to this page, where Desktop listens:
+ * Cmd/Ctrl+K and the Alt shortcuts work with the viewer focused. A copy goes up first; the viewer gets the key only
+ * if nothing up here took it.
+ */
+function forwardShortcuts(frame: HTMLIFrameElement) {
+    let inner: Window | null = null
+    try {
+        inner = frame.contentWindow
+        void inner?.document
+    } catch {
+        return // not this origin (never: this app serves the viewer)
+    }
+    inner?.addEventListener("keydown", (event) => {
+        if (!(event.metaKey || event.ctrlKey || event.altKey || event.key === "Escape")) {
+            return
+        }
+        const { key, code, location, repeat, metaKey, ctrlKey, altKey, shiftKey } = event
+        const copy = new KeyboardEvent("keydown", {
+            key,
+            code,
+            location,
+            repeat,
+            metaKey,
+            ctrlKey,
+            altKey,
+            shiftKey,
+            bubbles: true,
+            cancelable: true,
+        })
+        dispatchEvent(copy)
+        if (copy.defaultPrevented) {
+            event.preventDefault()
+            event.stopImmediatePropagation()
+        }
+    }, true)
 }
 
 export function App() {
@@ -93,6 +131,7 @@ export function App() {
                     id="viewer"
                     title="Rerun viewer"
                     src={src}
+                    onLoad={(event) => forwardShortcuts(event.currentTarget)}
                     allow="cross-origin-isolated; fullscreen; clipboard-read; clipboard-write"
                 />
             )}

@@ -2,7 +2,7 @@
 // passes: the DIMOS_APP env var, one JSON object and the whole interface (docs/apps.md; dimos_app.ts).
 import { dimosApp } from "./dimos_app.ts"
 import { handle } from "./http.ts"
-import { DESCRIPTION, routes, startProbing, stopStartedViewer } from "./routes.ts"
+import { DESCRIPTION, proxyViewer, routes, startProbing, stopStartedViewer, VIEWER_PATH } from "./routes.ts"
 
 function flag(name: string): string | undefined {
     const index = Deno.args.indexOf(`--${name}`)
@@ -35,8 +35,12 @@ async function file(path: string): Promise<Response> {
 }
 
 async function serve(request: Request): Promise<Response> {
-    const path = new URL(request.url).pathname
-    return (await handle(request, routes, DESCRIPTION)) ?? file(path)
+    const url = new URL(request.url)
+    const path = url.pathname.replace(/^\/+/, "")
+    if (path.startsWith(VIEWER_PATH)) {
+        return proxyViewer(path.slice(VIEWER_PATH.length), url.search)
+    }
+    return (await handle(request, routes, DESCRIPTION)) ?? file(url.pathname)
 }
 
 startProbing()

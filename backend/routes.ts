@@ -67,8 +67,8 @@ export function sourceAddress(v: Viewer = viewer, s: Source = source): string | 
     }
 }
 
-/** the iframe's src */
-export function frameUrl(v: Viewer = viewer, s: Source = source): string {
+/** the viewer's page URL (what `rerun --serve-web` serves, or the given URL), with its source */
+export function viewerUrl(v: Viewer = viewer, s: Source = source): string {
     const address = sourceAddress(v, s)
     if ("url" in v && (v.url.includes("?") && s.kind === "default")) {
         return v.url
@@ -77,12 +77,48 @@ export function frameUrl(v: Viewer = viewer, s: Source = source): string {
     return address ? `${base}?url=${encodeURIComponent(address)}` : base
 }
 
+/** the folder of the viewer's page: what VIEWER_PATH proxies */
+function viewerDir(v: Viewer = viewer): string {
+    return new URL(".", viewerUrl(v, { kind: "default" }).split("?")[0]).href
+}
+
+/** where this app serves the viewer's files from its own origin (proxy, below) */
+export const VIEWER_PATH = "viewer/"
+
+/** the iframe's src: the viewer through this app (same origin as the page, so its keys reach Desktop: Cmd+K) */
+export function frameUrl(v: Viewer = viewer, s: Source = source): string {
+    return `${SELF}${VIEWER_PATH}${new URL(viewerUrl(v, s)).href.slice(viewerDir(v).length)}`
+}
+
+/**
+ * The viewer's own files (its page, re_viewer.js, the wasm) served from this app's origin: a frame on the viewer's
+ * port is another origin, whose keys never reach the page or Desktop (Cmd+K, Alt shortcuts while the viewer has
+ * focus). The viewer streams its data from the data proxy (:9876) itself, as before.
+ */
+export async function proxyViewer(rest: string, search: string): Promise<Response> {
+    let response: Response
+    try {
+        response = await fetch(new URL(`${rest}${search}`, viewerDir()), { signal: AbortSignal.timeout(30_000) })
+    } catch (error) {
+        return new Response(`the Rerun viewer at ${viewerOrigin()} isn't answering: ${error}`, { status: 502 })
+    }
+    const headers = new Headers()
+    for (const name of ["content-type", "cache-control", "etag", "last-modified"]) {
+        const value = response.headers.get(name)
+        if (value) {
+            headers.set(name, value)
+        }
+    }
+    return new Response(response.body, { status: response.status, headers })
+}
+
 export function state() {
     return {
         viewer,
         viewerOrigin: viewerOrigin(),
         source: { ...source, address: sourceAddress() },
         frameUrl: frameUrl(),
+        viewerUrl: viewerUrl(),
         reachable,
         checkedAt,
         reload,
