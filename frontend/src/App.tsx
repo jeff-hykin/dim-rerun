@@ -120,7 +120,6 @@ export function App() {
                                 actions: [{
                                     label: "Open the Launcher",
                                     app: "launcher",
-                                    params: { kind: "blueprint" },
                                 }],
                             }
                             : {
@@ -146,7 +145,7 @@ export function App() {
                         type="button"
                         className="dim-btn sm primary"
                         onClick={() =>
-                            openApp("launcher", { kind: "blueprint" })}
+                            openApp("launcher")}
                     >
                         Open the Launcher
                     </button>
