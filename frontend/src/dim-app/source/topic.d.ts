@@ -1,4 +1,4 @@
 export function checkTopic(
-  topic: string,
-  options?: { wildcards?: boolean },
-): string;
+    topic: string,
+    options?: { wildcards?: boolean },
+): string

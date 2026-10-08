@@ -7,8 +7,8 @@ uses:
         - GET /api/apps
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
     "@zenoh-gateway": ">=0.5 <0.6"
-# the page checks this browser reaches the Rerun web viewer before framing it (a no-cors fetch of its origin): a port on
-# Desktop's machine as the browser reached Desktop, or any host/port the settings name, so any http(s) origin
+# the page runs Rerun's web viewer, which reads a Rerun gRPC server (gRPC-web fetches): on Desktop's machine as the
+# browser reached Desktop (its host, the settings' port), or any host/port the settings name; and .rrd recording URLs
 connects:
     - http://*:*
     - https://*:*
@@ -19,44 +19,35 @@ provides:
     # what its server answers only its own pages (its endpoints: below are the public API)
     private:
         - api/state/*
-        - api/viewer/*
+        - api/grpc/*
         - api/recording/*
-    description: "Rerun: shows a Rerun web viewer (rerun --serve-web) inside Desktop, on a live stream or a recording (.rrd)"
+    description: >-
+        Rerun: Rerun's web viewer inside Desktop, on a live gRPC stream (dimos's Rerun bridge by default) or a recording
+        (.rrd)
     endpoints:
         - method: GET
           path: api/state
           description: >-
-              Rerun's state: which web viewer it frames (port on Desktop's machine, host:port or URL) and its gRPC server
-              (settings), what that viewer shows (default stream, a stream address, a recording URL or local .rrd), the
-              frame URL (@host = the host the browser reached Desktop at), and whether the viewer is reachable
+              Rerun's state: the settings' gRPC server, what the viewer shows (default stream, a stream address, a
+              recording URL or local .rrd; @host = the host the browser reached Desktop at), and whether the gRPC
+              server answers
           role: context
         - method: POST
-          path: api/viewer
+          path: api/settings
           description: >-
-              The app's settings: which Rerun web viewer it frames and the gRPC server that viewer shows. Viewer: port
-              (default 9090) of `rerun --serve-web` on Desktop's machine, or host + port of one elsewhere, or url, a full
-              viewer URL (its own ?url= is kept). grpc: the Rerun gRPC server to show, a port on the viewer's machine
-              (default 9877, where dimos's Rerun bridge serves) or a rerun+http(s)://…/proxy URL. Saved; answers whether
-              the viewer is reachable
+              The app's setting, saved: grpc, the Rerun gRPC server the viewer shows by default, a port on Desktop's
+              machine (default 9877, where dimos's Rerun bridge serves) or a rerun+http(s)://host:port/proxy URL.
+              Answers the new state
           params:
-              host:
-                  type: string
-                  description: "viewer host (or host:port); empty = Desktop's machine"
-              port:
-                  type: string
-                  description: viewer web port (default 9090)
-              url:
-                  type: string
-                  description: a full http(s) viewer URL instead of host/port
               grpc:
                   type: string
-                  description: "the gRPC server it shows: a port (default 9877) or rerun+http(s)://host:port/proxy"
+                  required: true
+                  description: "a port (default 9877) or rerun+http(s)://host:port/proxy"
         - method: POST
           path: api/open
           description: >-
-              Show something in the viewer: url = a live stream address (rerun+http://host:9877/proxy) or an http(s) .rrd
-              recording URL; or path = a local .rrd file (served to the viewer by this app). Starts a local viewer (rerun
-              --serve-web) first when none is answering
+              Show something in the viewer: url = a live stream address (rerun+http://host:9877/proxy) or an http(s)
+              .rrd recording URL; or path = a local .rrd file (served to the viewer by this app)
           params:
               url:
                   type: string
@@ -64,33 +55,30 @@ provides:
               path:
                   type: string
                   description: absolute path of a local .rrd file
+        - method: DELETE
+          path: api/open
+          description: 'Go back to the default live stream (the settings'' gRPC server, rerun+http://<host>:9877/proxy)'
         - method: GET
-          path: api/viewer/grpc
+          path: api/grpc/check
           description: >-
-              Whether the gRPC server the viewer shows answers and lets a viewer at origin read it (Rerun allows only
-              localhost origins unless started with --cors-allow-origin)
+              Whether the shown gRPC server lets a page at origin read it (Rerun allows only localhost origins unless
+              started with --cors-allow-origin); allowed null = it doesn't answer, or a recording is shown
           params:
               origin:
                   type: string
                   required: true
-                  description: "the viewer's origin as the browser reaches it, e.g. http://100.64.0.1:9090"
+                  description: 'the page''s origin as the browser reaches it, e.g. http://100.64.0.1:5555'
         - method: POST
-          path: api/viewer/start
+          path: api/server/start
           description: >-
-              Start a Rerun web viewer on this machine (`rerun --serve-web` on the viewer port) when the framed one isn't
-              answering; api/open does this by itself
-        - method: DELETE
-          path: api/open
-          description: >-
-              Go back to the viewer's default live stream (the settings' gRPC server, rerun+http://<viewer host>:9877/proxy)
+              Start a Rerun gRPC server on Desktop's machine (`rerun --serve-grpc` on the settings' port, any host may
+              read it) when none answers there; dimos's Rerun bridges started later send to it
         - method: POST
           path: api/reconnect
-          description: Check the viewer again now and reload its frame (when it was restarted or shows stale data)
+          description: Check the gRPC server again now and reopen the source in the viewer (when it restarted)
         - method: GET
           path: "api/recording/{name}"
-          description: >-
-              The local .rrd opened with api/open path, as bytes (what the viewer loads; CORS-open so a viewer on another port
-              can fetch it)
+          description: "The local .rrd opened with api/open path, as bytes (what the viewer loads)"
           params:
               name:
                   type: string

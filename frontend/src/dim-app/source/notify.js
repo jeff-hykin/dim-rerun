@@ -16,25 +16,25 @@
 //   app                  default: this app's name (from /apps/<name>/ or <meta name="dim-app">)
 
 function appName() {
-  try {
-    const meta = document.querySelector('meta[name="dim-app"]');
-    if (meta?.content) {
-      return meta.content;
+    try {
+        const meta = document.querySelector('meta[name="dim-app"]')
+        if (meta?.content) {
+            return meta.content
+        }
+        const match = location.pathname.match(/^\/apps\/([^/]+)/)
+        return match ? decodeURIComponent(match[1]) : null
+    } catch {
+        return null
     }
-    const match = location.pathname.match(/^\/apps\/([^/]+)/);
-    return match ? decodeURIComponent(match[1]) : null;
-  } catch {
-    return null;
-  }
 }
 
 /** True when this page is served by dimOS Desktop (under /apps/<name>/). */
 export function underDesktop() {
-  try {
-    return /^\/apps\/[^/]+/.test(location.pathname);
-  } catch {
-    return false;
-  }
+    try {
+        return /^\/apps\/[^/]+/.test(location.pathname)
+    } catch {
+        return false
+    }
 }
 
 /**
@@ -45,43 +45,43 @@ export function underDesktop() {
  * @returns {Promise<string | number | null>}
  */
 export async function notify(notification, options = {}) {
-  try {
-    if (!options.origin && !underDesktop()) {
-      console.debug(
-        "[dim-app] notify: not under dimOS Desktop, skipped:",
-        notification?.title,
-      );
-      return null;
+    try {
+        if (!options.origin && !underDesktop()) {
+            console.debug(
+                "[dim-app] notify: not under dimOS Desktop, skipped:",
+                notification?.title,
+            )
+            return null
+        }
+        const app = notification.app ?? appName() ?? undefined
+        const payload = {
+            title: String(notification.title ?? "").slice(0, 200),
+            body: String(notification.body ?? "").slice(0, 2000),
+            kind: notification.kind ?? "ok",
+            sound: notification.sound ?? "default",
+            app,
+            icon: notification.icon ??
+                (app ? `/api/apps/${encodeURIComponent(app)}/icon` : undefined),
+            actions: notification.actions,
+            details: notification.details,
+        }
+        const url = new URL(
+            "/api/notifications",
+            options.origin ?? location.origin,
+        )
+        const response = await fetch(url, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(payload),
+        })
+        if (!response.ok) {
+            return null
+        }
+        const result = await response.json().catch(() => ({}))
+        return result?.id ?? null
+    } catch {
+        return null
     }
-    const app = notification.app ?? appName() ?? undefined;
-    const payload = {
-      title: String(notification.title ?? "").slice(0, 200),
-      body: String(notification.body ?? "").slice(0, 2000),
-      kind: notification.kind ?? "ok",
-      sound: notification.sound ?? "default",
-      app,
-      icon: notification.icon ??
-        (app ? `/api/apps/${encodeURIComponent(app)}/icon` : undefined),
-      actions: notification.actions,
-      details: notification.details,
-    };
-    const url = new URL(
-      "/api/notifications",
-      options.origin ?? location.origin,
-    );
-    const response = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-    if (!response.ok) {
-      return null;
-    }
-    const result = await response.json().catch(() => ({}));
-    return result?.id ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -91,21 +91,21 @@ export async function notify(notification, options = {}) {
  *     battery(percent)  // on every reading
  */
 export function lowLevelAlert(
-  { low, hysteresis = 5, notification, send = notify },
+    { low, hysteresis = 5, notification, send = notify },
 ) {
-  let armed = true;
-  return (value) => {
-    if (typeof value !== "number" || !Number.isFinite(value)) {
-      return false;
+    let armed = true
+    return (value) => {
+        if (typeof value !== "number" || !Number.isFinite(value)) {
+            return false
+        }
+        if (armed && value <= low) {
+            armed = false
+            send(notification(value))
+            return true
+        }
+        if (!armed && value > low + hysteresis) {
+            armed = true
+        }
+        return false
     }
-    if (armed && value <= low) {
-      armed = false;
-      send(notification(value));
-      return true;
-    }
-    if (!armed && value > low + hysteresis) {
-      armed = true;
-    }
-    return false;
-  };
 }

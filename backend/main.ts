@@ -2,7 +2,7 @@
 // passes: the DIMOS_APP env var, one JSON object and the whole interface (docs/apps.md; dimos_app.ts).
 import { dimosApp } from "./dimos_app.ts"
 import { handle } from "./http.ts"
-import { DESCRIPTION, routes, startProbing, stopStartedViewer } from "./routes.ts"
+import { DESCRIPTION, routes, startProbing, stopStartedServer } from "./routes.ts"
 
 function flag(name: string): string | undefined {
     const index = Deno.args.indexOf(`--${name}`)
@@ -26,7 +26,11 @@ async function file(path: string): Promise<Response> {
         try {
             const bytes = await Deno.readFile(`${frontend}/${candidate}`)
             const type = types[candidate.split(".").pop() ?? ""] ?? "application/octet-stream"
-            return new Response(bytes, { headers: { "content-type": type } })
+            // vite's assets/ have hashed names: cached for good (the viewer's wasm is ~47 MB)
+            const cache: Record<string, string> = candidate.startsWith("assets/")
+                ? { "cache-control": "public, max-age=31536000, immutable" }
+                : {}
+            return new Response(bytes, { headers: { "content-type": type, ...cache } })
         } catch {
             // next candidate: unknown paths get the app (hash routing)
         }
@@ -40,10 +44,10 @@ async function serve(request: Request): Promise<Response> {
 }
 
 startProbing()
-// a viewer this app started stops with it (Desktop stops an app with SIGTERM)
+// a gRPC server this app started stops with it (Desktop stops an app with SIGTERM)
 for (const signal of ["SIGTERM", "SIGINT"] as const) {
     Deno.addSignalListener(signal, async () => {
-        await stopStartedViewer()
+        await stopStartedServer()
         Deno.exit(0)
     })
 }

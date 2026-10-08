@@ -1,6 +1,6 @@
 import { assert, assertEquals } from "@std/assert"
 import { handle } from "./http.ts"
-import { DESCRIPTION, routes, stopStartedViewer } from "./routes.ts"
+import { DESCRIPTION, routes, stopStartedServer } from "./routes.ts"
 
 const call = async (method: string, path: string, body?: unknown) => {
     const response = await handle(
@@ -18,62 +18,44 @@ const call = async (method: string, path: string, body?: unknown) => {
     return { status: response!.status, json, headers: response!.headers }
 }
 
-Deno.test("api/state: Desktop's machine (HOST, the browser's name for it) :9090 on dimos's gRPC :9877", async () => {
+const freePort = () => {
+    const listener = Deno.listen({ port: 0 })
+    const port = String((listener.addr as Deno.NetAddr).port)
+    listener.close()
+    return port
+}
+
+Deno.test("api/state: dimos's gRPC :9877 on Desktop's machine (HOST, the browser's name for it)", async () => {
     const { json } = await call("GET", "api/state")
-    assertEquals([json.viewer, json.grpc], [{ host: "", port: "9090" }, { port: "9877" }])
-    assertEquals(json.viewerOrigin, "http://@host:9090")
-    assertEquals(json.frameUrl, `http://@host:9090/?url=${encodeURIComponent("rerun+http://@host:9877/proxy")}`)
+    assertEquals(json.grpc, { port: "9877" })
+    assertEquals(json.source, { kind: "default", address: "rerun+http://@host:9877/proxy" })
     assertEquals((await call("GET", "api/states")).status, 404)
 })
 
-Deno.test("api/viewer: a reachable viewer (a stand-in server) and an unreachable one", async () => {
-    const server = Deno.serve({ port: 0, onListen: () => {} }, () => new Response("rerun"))
-    const { port } = server.addr as Deno.NetAddr
-    // localhost is Desktop's machine: the browser reaches it at HOST, this server probes 127.0.0.1
-    const up = await call("POST", "api/viewer", { host: "localhost", port: String(port) })
-    assertEquals([up.json.reachable, up.json.viewer], [true, { host: "", port: String(port) }])
-    assertEquals(up.json.viewerOrigin, `http://@host:${port}`)
-    assertEquals((await call("POST", "api/viewer", { host: `127.0.0.1:${port}` })).json.viewer.port, String(port))
+Deno.test("api/settings: a port or a rerun+http URL; whether it answers (a stand-in server)", async () => {
+    const server = Deno.serve({ port: 0, onListen: () => {} }, () => new Response("grpc"))
+    const port = String((server.addr as Deno.NetAddr).port)
+    const up = await call("POST", "api/settings", { grpc: port })
+    assertEquals([up.json.reachable, up.json.source.address], [true, `rerun+http://@host:${port}/proxy`])
     await server.shutdown()
     assertEquals((await call("POST", "api/reconnect")).json.reachable, false)
-    assertEquals((await call("POST", "api/viewer", { host: "bad host!" })).status, 400)
-    assertEquals((await call("POST", "api/viewer", { url: "ftp://x" })).status, 400)
-    const full = await call("POST", "api/viewer", { url: "http://127.0.0.1:1/?url=rerun%2Bhttp%3A%2F%2Fx%3A1%2Fproxy" })
-    assertEquals(full.json.frameUrl, "http://127.0.0.1:1/?url=rerun%2Bhttp%3A%2F%2Fx%3A1%2Fproxy")
-    const robot = await call("POST", "api/viewer", { host: "robot.local", port: "9091" })
-    assertEquals(
-        robot.json.frameUrl,
-        `http://robot.local:9091/?url=${encodeURIComponent("rerun+http://robot.local:9877/proxy")}`,
-    )
-    await call("POST", "api/viewer", { port: "9090" })
-})
-
-Deno.test("api/viewer grpc: the gRPC server the viewer shows, a port or a rerun+http URL", async () => {
-    const port = await call("POST", "api/viewer", { port: "9090", grpc: "9876" })
-    assertEquals(port.json.grpc, { port: "9876" })
-    assert(port.json.frameUrl.endsWith(encodeURIComponent("rerun+http://@host:9876/proxy")))
-    const url = await call("POST", "api/viewer", { port: "9090", grpc: "rerun+http://robot:9877/proxy" })
-    assert(url.json.frameUrl.endsWith(encodeURIComponent("rerun+http://robot:9877/proxy")))
-    // left out: kept
-    assertEquals((await call("POST", "api/viewer", { port: "9090" })).json.grpc, {
-        url: "rerun+http://robot:9877/proxy",
-    })
-    assertEquals((await call("POST", "api/viewer", { grpc: "http://x" })).status, 400)
-    await call("POST", "api/viewer", { port: "9090", grpc: "9877" })
+    const url = await call("POST", "api/settings", { grpc: "rerun+http://robot:9877/proxy" })
+    assertEquals(url.json.source.address, "rerun+http://robot:9877/proxy")
+    assertEquals((await call("POST", "api/settings", { grpc: "http://x" })).status, 400)
+    assertEquals((await call("POST", "api/settings", {})).status, 400)
+    await call("POST", "api/settings", { grpc: "9877" })
 })
 
 Deno.test("api/open: a stream, a recording URL, a local file; DELETE goes back to the default", async () => {
-    const stream = await call("POST", "api/open", { url: "rerun+http://robot:9876/proxy" })
-    assertEquals(stream.json.source.kind, "stream")
-    assert(stream.json.frameUrl.endsWith(encodeURIComponent("rerun+http://robot:9876/proxy")))
-    assertEquals((await call("POST", "api/open", { url: "https://x/a.rrd" })).json.source.kind, "url")
+    const stream = await call("POST", "api/open", { url: "rerun+http://robot:9877/proxy" })
+    assertEquals(stream.json.source, { kind: "stream", address: "rerun+http://robot:9877/proxy" })
+    const url = await call("POST", "api/open", { url: "https://x/a.rrd" })
+    assertEquals([url.json.source.kind, url.json.reachable], ["url", null])
     const path = await Deno.makeTempFile({ suffix: ".rrd" })
     await Deno.writeTextFile(path, "RRF2")
     const file = await call("POST", "api/open", { path })
-    assertEquals(file.json.source.kind, "file")
-    assert(file.json.frameUrl.includes(encodeURIComponent("@app/api/recording")))
-    const bytes = await call("GET", "api/recording/a.rrd")
-    assertEquals([bytes.json, bytes.headers.get("access-control-allow-origin")], ["RRF2", "*"])
+    assertEquals(file.json.source.address, `@app/api/recording/${encodeURIComponent(path.split("/").pop()!)}`)
+    assertEquals((await call("GET", "api/recording/a.rrd")).json, "RRF2")
     assertEquals((await call("POST", "api/open", { url: "ftp://nope" })).status, 400)
     assertEquals((await call("POST", "api/open", { path: "/no/such.rrd" })).status, 404)
     assertEquals((await call("DELETE", "api/open")).json.source.kind, "default")
@@ -81,56 +63,51 @@ Deno.test("api/open: a stream, a recording URL, a local file; DELETE goes back t
     await Deno.remove(path)
 })
 
+Deno.test("api/grpc/check: a server that lets this page's origin read it, one that doesn't, none", async () => {
+    const allowOnly = "http://localhost:5555"
+    const server = Deno.serve({ port: 0, onListen: () => {} }, (request) =>
+        new Response(null, {
+            headers: request.headers.get("origin") === allowOnly ? { "access-control-allow-origin": allowOnly } : {},
+        }))
+    const port = String((server.addr as Deno.NetAddr).port)
+    await call("POST", "api/settings", { grpc: port })
+    const check = async (origin: string) =>
+        (await call("GET", `api/grpc/check?origin=${encodeURIComponent(origin)}`)).json
+    assertEquals(await check(allowOnly), { address: `rerun+http://@host:${port}/proxy`, allowed: true })
+    assertEquals((await check("http://100.64.0.1:5555")).allowed, false)
+    await server.shutdown()
+    assertEquals((await check(allowOnly)).allowed, null)
+    assertEquals((await call("GET", "api/grpc/check")).status, 400)
+    await call("POST", "api/settings", { grpc: "9877" })
+})
+
 Deno.test("agent.json lists every route", async () => {
     const { json } = await call("GET", "agent.json")
     assertEquals(json.endpoints.length, routes.length)
 })
 
-Deno.test("api/open starts a viewer on this machine when none answers (a stand-in rerun CLI)", async () => {
+Deno.test("api/server/start starts a gRPC server on this machine when none answers (a stand-in rerun CLI)", async () => {
     const dir = await Deno.makeTempDir()
     const fake = `${dir}/rerun`
-    // `rerun --serve-web --web-viewer-port <port> ...` → any web server on that port will do
-    await Deno.writeTextFile(fake, `#!/bin/sh\nexec python3 -m http.server --bind 127.0.0.1 "$3"\n`)
+    // `rerun --serve-grpc --port <port> ...` → any web server on that port will do
+    await Deno.writeTextFile(
+        fake,
+        `#!/bin/sh\necho "$@" > "${dir}/args"\nexec python3 -m http.server --bind 127.0.0.1 "$3"\n`,
+    )
     await Deno.chmod(fake, 0o755)
-    const rrd = `${dir}/a.rrd`
-    await Deno.writeTextFile(rrd, "RRF2")
-    const listener = Deno.listen({ port: 0 })
-    const port = String((listener.addr as Deno.NetAddr).port)
-    listener.close()
+    const port = freePort()
     Deno.env.set("RERUN_BIN", fake)
     Deno.env.delete("DIM_RERUN_NO_START")
     try {
-        assertEquals((await call("POST", "api/viewer", { host: "127.0.0.1", port })).json.reachable, false)
-        const opened = await call("POST", "api/open", { path: rrd })
-        assertEquals(opened.json.viewerStart, { started: true })
-        assertEquals((await call("GET", "api/state")).json.reachable, true)
+        assertEquals((await call("POST", "api/settings", { grpc: port })).json.reachable, false)
+        const started = await call("POST", "api/server/start")
+        assertEquals([started.json.started, started.json.reachable], [true, true])
+        assert((await Deno.readTextFile(`${dir}/args`)).includes("--bind 0.0.0.0 --cors-allow-origin http://*"))
         // already up: nothing more to start
-        assertEquals((await call("POST", "api/viewer/start")).json.started, false)
+        assertEquals((await call("POST", "api/server/start")).json.started, false)
     } finally {
-        await stopStartedViewer()
+        await stopStartedServer()
         Deno.env.delete("RERUN_BIN")
+        await call("POST", "api/settings", { grpc: "9877" })
     }
-})
-
-Deno.test("api/viewer/grpc: a gRPC server that lets this viewer origin read it, one that doesn't, none", async () => {
-    const allowOnly = "http://localhost:9090"
-    const server = Deno.serve({ port: 0, onListen: () => {} }, (request) =>
-        new Response(null, {
-            headers: request.headers.get("origin") === allowOnly ? { "access-control-allow-origin": allowOnly } : {},
-        }))
-    const { port } = server.addr as Deno.NetAddr
-    await call("DELETE", "api/open")
-    await call("POST", "api/viewer", { port: "9090", grpc: String(port) })
-    const check = async (origin: string) =>
-        (await call("GET", `api/viewer/grpc?origin=${encodeURIComponent(origin)}`)).json
-    assertEquals(await check(allowOnly), {
-        address: `rerun+http://@host:${port}/proxy`,
-        reachable: true,
-        allowed: true,
-    })
-    assertEquals((await check("http://100.64.0.1:9090")).allowed, false)
-    await server.shutdown()
-    assertEquals((await check(allowOnly)).reachable, false)
-    assertEquals((await call("GET", "api/viewer/grpc")).status, 400)
-    await call("POST", "api/viewer", { port: "9090", grpc: "9877" })
 })
