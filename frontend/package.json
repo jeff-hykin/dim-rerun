@@ -10,6 +10,7 @@
     },
     "dependencies": {
         "@rerun-io/web-viewer": "0.32.0",
+        "dimos-react": "https://codeload.github.com/jeff-hykin/dimos-react/tar.gz/refs/tags/v0.1.0",
         "react": "^19.1.0",
         "react-dom": "^19.1.0"
     },

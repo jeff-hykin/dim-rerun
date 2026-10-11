@@ -6,10 +6,22 @@
 // (useBackendState: zenoh topic state/state), so the agent's changes show here too.
 import { useEffect, useRef, useState } from "react"
 import { WebViewer } from "@rerun-io/web-viewer"
+import {
+    Alert,
+    Button,
+    ConnectionStatus,
+    EmptyState,
+    Hud,
+    IconButton,
+    Label,
+    Spinner,
+    TextInput,
+    Toolbar,
+    useBackendState,
+    useZenoh,
+} from "dimos-react"
 import { call } from "./api.ts"
-import { EmptyState, useBackendState } from "./dim-app/source/react.js"
 import { openApp } from "./dim-app/source/desktop.js"
-import { getZenoh } from "./dim-app/source/zenoh.js"
 
 type State = {
     grpc: { port: string } | { url: string }
@@ -121,7 +133,12 @@ function useRerunViewer(
 }
 
 export function App() {
-    const [state, { error: stateError }] = useBackendState<State>("api/state")
+    const [state, { error: stateError }] = useBackendState("state", {
+        url: "api/state",
+    }) as [
+        State | undefined,
+        { error: Error | null },
+    ]
     const [grpcField, setGrpcField] = useState("")
     const [source, setSource] = useState("")
     const [expanded, setExpanded] = useState(false)
@@ -138,6 +155,7 @@ export function App() {
     // to it gets a hint
     const [running, setRunning] = useState<boolean | null>(null)
     const [hintClosed, setHintClosed] = useState(false)
+    const zenoh = useZenoh()
     useEffect(() => {
         const read = () =>
             fetch("../../dimos/runs").then((r) => r.ok ? r.json() : null).then(
@@ -145,11 +163,11 @@ export function App() {
                 () => setRunning(null),
             )
         read()
-        const off = getZenoh().subscribeDesktop("runs", read)
+        const off = zenoh?.subscribeDesktop("runs", read)
         return () => {
-            off()
+            off?.()
         }
-    }, [])
+    }, [zenoh])
 
     const act = (promise: Promise<unknown>) => promise.then(() => setError(null), (e) => setError(e.message))
     const [starting, setStarting] = useState(false)
@@ -230,15 +248,25 @@ export function App() {
         state?.reload ?? 0,
     )
     const connected = usable && viewer.ready
-    const collapsed = !expanded
 
-    const settingsAction = { label: "Settings", onClick: openSettings }
-    const launcherAction = { label: "Open the Launcher", app: "launcher" }
-    const empty = !state && stateError
+    type Action = { label: string; onClick: () => void; primary?: boolean }
+    const settingsAction: Action = { label: "Settings", onClick: openSettings }
+    const launcherAction: Action = {
+        label: "Open the Launcher",
+        onClick: () => openApp("launcher"),
+    }
+    type Empty = {
+        testId: string
+        tone?: "warn"
+        busy?: boolean
+        title: string
+        body: string
+        actions: Action[]
+    }
+    const empty: Empty = !state && stateError
         ? {
             testId: "onboard-backend-down",
-            label: "Server not answering",
-            tone: "warn" as const,
+            tone: "warn",
             title: "The Rerun app's server isn't answering",
             body: "Restarting the app usually fixes it: close it with ✕ and open it again.",
             actions: [{ label: "Try again", onClick: () => location.reload() }],
@@ -246,8 +274,7 @@ export function App() {
         : viewer.failed
         ? {
             testId: "viewer-failed",
-            label: "Viewer didn't start",
-            tone: "warn" as const,
+            tone: "warn",
             title: "Rerun's viewer couldn't start in this browser",
             body:
                 `${viewer.failed}. It needs WebGL 2 or WebGPU: try another browser (Chrome, Firefox) or turn on hardware acceleration.`,
@@ -257,7 +284,6 @@ export function App() {
         ? local
             ? {
                 testId: "onboard-no-server",
-                label: "No Rerun server",
                 title: "Nothing is serving Rerun data yet",
                 body: state.rerun
                     ? `Nothing answers at ${hostPort}. Launch a blueprint with a Rerun bridge (it serves there), or start a server here that blueprints send to. Running your own Rerun server? Set its port in Settings.`
@@ -267,6 +293,7 @@ export function App() {
                         ? [{
                             label: starting ? "Starting…" : "Start a server",
                             onClick: startServer,
+                            primary: true,
                         }]
                         : []),
                     launcherAction,
@@ -275,142 +302,188 @@ export function App() {
             }
             : {
                 testId: "onboard-no-server",
-                label: "No Rerun server",
-                tone: "warn" as const,
+                tone: "warn",
                 title: "The Rerun server doesn't answer",
                 body:
                     `Nothing answers at ${hostPort}. Start it on that machine (rerun --serve-grpc --cors-allow-origin 'http://*'), or change it in Settings. This page keeps looking, so it shows up by itself.`,
-                actions: [{ label: "Try again", onClick: retry }, settingsAction],
+                actions: [
+                    { label: "Try again", onClick: retry, primary: true },
+                    settingsAction,
+                ],
             }
         : state && grpcUrl && state.reachable && reach === false
         ? {
             testId: "grpc-unreachable",
-            label: "Can't reach it",
-            tone: "warn" as const,
+            tone: "warn",
             title: "This browser can't reach the Rerun server",
             body: local
                 ? `A Rerun server is running on Desktop's computer, but this browser gets no answer from ${hostPort}. A firewall there may block port ${port}, or the server only listens on that computer itself: restart it with --bind 0.0.0.0. Or set another port in Settings.`
                 : `This browser gets no answer from ${hostPort}. Check that machine is reachable from here (same network or tailnet, port ${port} open), or change it in Settings.`,
-            actions: [{ label: "Try again", onClick: retry }, settingsAction],
+            actions: [
+                { label: "Try again", onClick: retry, primary: true },
+                settingsAction,
+            ],
         }
         : state && grpcUrl && allowed === false
         ? {
             testId: "grpc-refused",
-            label: "Not allowed",
-            tone: "warn" as const,
+            tone: "warn",
             title: "The Rerun server won't let this page read it",
             body: local
                 ? `The server at ${hostPort} only lets pages on its own computer read it (Rerun's default, as a blueprint's Rerun bridge starts it). Stop the blueprint, press Start a server here, then launch the blueprint again: it sends to this app's server, which any browser may read. Or restart your own server with --cors-allow-origin 'http://*'.`
                 : `The server at ${hostPort} only lets pages on its own computer read it (Rerun's default). Restart it with --cors-allow-origin 'http://*', or change it in Settings.`,
             actions: [
-                { label: "Try again", onClick: retry },
+                { label: "Try again", onClick: retry, primary: true },
                 ...(local ? [launcherAction] : []),
                 settingsAction,
             ],
         }
         : {
             testId: "onboard-looking",
-            label: usable ? "Loading the viewer" : "Looking for a Rerun server",
             busy: true,
             title: usable ? "Loading Rerun's viewer" : "Looking for a Rerun server",
             body: usable ? "The first load takes a few seconds." : `Checking ${hostPort || "…"}`,
             actions: [settingsAction],
         }
 
-    return (
-        <div className="frame-wrap">
-            <div id="viewer" ref={host} data-testid="viewer" />
+    const status = connected
+        ? (state?.source.kind === "default" ? "connected" : `connected · ${state?.source.kind}`)
+        : "waiting…"
 
-            <div className={`overlay${connected ? "" : " show"}`}>
-                {!connected && <EmptyState {...empty} />}
-                {error && <div className="dim-alert warn">{error}</div>}
-            </div>
+    return (
+        // the viewer (and Rerun's own timeline at its bottom) ends above Desktop's dock
+        <div
+            style={{
+                position: "fixed",
+                inset: 0,
+                bottom: "var(--dim-inset-bottom)",
+                background: "var(--bg)",
+            }}
+        >
+            <div
+                ref={host}
+                data-testid="viewer"
+                style={{ width: "100%", height: "100%" }}
+            />
+
+            {!connected && (
+                <EmptyState
+                    layer
+                    data-testid={empty.testId}
+                    tone={empty.tone}
+                    icon={empty.busy ? null : empty.tone === "warn" ? "warn" : "info"}
+                    title={empty.title}
+                    message={empty.body}
+                    actions={empty.actions.map((action) => (
+                        <Button
+                            key={action.label}
+                            size="sm"
+                            variant={action.primary ? "primary" : "default"}
+                            onClick={action.onClick}
+                        >
+                            {action.label}
+                        </Button>
+                    ))}
+                >
+                    {empty.busy && <Spinner label={empty.title} />}
+                </EmptyState>
+            )}
 
             {connected && running === false && state?.source.kind === "default" &&
                 !hintClosed && (
-                <div
-                    className="dim-alert info nothing-sending"
-                    data-testid="onboard-nothing-sending"
-                >
-                    <span>
+                <Hud position="bottom">
+                    <Alert
+                        tone="info"
+                        data-testid="onboard-nothing-sending"
+                        onClose={() => setHintClosed(true)}
+                        actions={
+                            <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => openApp("launcher")}
+                            >
+                                Open the Launcher
+                            </Button>
+                        }
+                    >
                         Nothing is sending to Rerun yet: launch a blueprint with a Rerun bridge.
-                    </span>
-                    <button
-                        type="button"
-                        className="dim-btn sm primary"
-                        onClick={() => openApp("launcher")}
-                    >
-                        Open the Launcher
-                    </button>
-                    <button
-                        type="button"
-                        className="dim-btn sm ghost"
-                        onClick={() => setHintClosed(true)}
-                    >
-                        Dismiss
-                    </button>
-                </div>
+                    </Alert>
+                </Hud>
             )}
 
-            <div
-                className={`panel dim-panel glass${collapsed ? " collapsed" : ""}`}
-                onClick={() => collapsed && setExpanded(true)}
-                data-testid="settings"
-            >
-                {/* inside Desktop, its window bar already names the app */}
-                {self.parent === self && <span className="title dim-title">Rerun</span>}
-                <label
-                    className="dim-label"
-                    htmlFor="grpc"
-                    title="the Rerun gRPC server the viewer shows"
-                >
-                    gRPC
-                </label>
-                <input
-                    className="dim-input dim-mono"
-                    id="grpc"
-                    type="text"
-                    spellCheck={false}
-                    autoComplete="off"
-                    placeholder="9877"
-                    title="the Rerun gRPC server to show: a port on Desktop's computer (9877 = dimos's Rerun bridge) or rerun+http://host:port/proxy"
-                    value={grpcField}
-                    onChange={(e) => setGrpcField(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && save()}
-                />
-                <button
-                    type="button"
-                    className="dim-btn primary"
-                    id="save"
-                    onClick={(e) => (e.stopPropagation(), save())}
-                >
-                    Save
-                </button>
-                <label className="dim-label" htmlFor="source">open</label>
-                <input
-                    className="dim-input dim-mono"
-                    id="source"
-                    type="text"
-                    spellCheck={false}
-                    autoComplete="off"
-                    placeholder={state?.source.kind === "default"
-                        ? "live stream (default)"
-                        : ".rrd URL / path, rerun+http://…"}
-                    value={source}
-                    onChange={(e) => setSource(e.target.value)}
-                    onKeyDown={(e) => e.key === "Enter" && open()}
-                />
-                <span className="stat" title={address ?? ""}>
-                    <span className={`dot${connected ? " on" : " err"}`} />
-                    <span>
-                        {connected
-                            ? (state?.source.kind === "default" ? "connected" : `connected · ${state?.source.kind}`)
-                            : "waiting…"}
-                    </span>
-                </span>
-                {collapsed && <span className="settings-link">⚙ Settings</span>}
-                {error && <span className="dim-alert danger">{error}</span>}
-            </div>
+            <Hud position="top" data-testid="settings">
+                <Toolbar floating>
+                    {/* inside Desktop, its window bar already names the app */}
+                    {self.parent === self && <Label>Rerun</Label>}
+                    <ConnectionStatus
+                        state={connected ? "connected" : stateError ? "lost" : "connecting"}
+                        label={status}
+                        title={address ?? ""}
+                    />
+                    {expanded
+                        ? (
+                            <>
+                                <Label title="the Rerun gRPC server the viewer shows">
+                                    gRPC
+                                </Label>
+                                <TextInput
+                                    id="grpc"
+                                    size="sm"
+                                    mono
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                    placeholder="9877"
+                                    title="the Rerun gRPC server to show: a port on Desktop's computer (9877 = dimos's Rerun bridge) or rerun+http://host:port/proxy"
+                                    style={{ width: 120 }}
+                                    value={grpcField}
+                                    onChange={setGrpcField}
+                                    onEnter={save}
+                                />
+                                <Button
+                                    id="save"
+                                    size="sm"
+                                    variant="primary"
+                                    icon="save"
+                                    onClick={save}
+                                >
+                                    Save
+                                </Button>
+                                <Label>open</Label>
+                                <TextInput
+                                    id="source"
+                                    size="sm"
+                                    mono
+                                    spellCheck={false}
+                                    autoComplete="off"
+                                    style={{ width: 220 }}
+                                    placeholder={state?.source.kind === "default"
+                                        ? "live stream (default)"
+                                        : ".rrd URL / path, rerun+http://…"}
+                                    value={source}
+                                    onChange={setSource}
+                                    onEnter={open}
+                                />
+                                <IconButton
+                                    icon="close"
+                                    size="sm"
+                                    label="Close settings"
+                                    onClick={() => setExpanded(false)}
+                                />
+                            </>
+                        )
+                        : (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                icon="settings"
+                                onClick={openSettings}
+                            >
+                                Settings
+                            </Button>
+                        )}
+                </Toolbar>
+                {error && state && <Alert tone="danger" onClose={() => setError(null)}>{error}</Alert>}
+            </Hud>
         </div>
     )
 }

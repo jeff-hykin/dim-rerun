@@ -25,7 +25,7 @@
                     version = "0.1.0";
                     src = ./frontend;
                     # `nix build .#frontend` prints the right hash when package-lock.json changes
-                    npmDepsHash = "sha256-TTkTQ8lHZqM5KNNYEITAeFcf/MlQuY+7VNs1Kfa1kIc=";
+                    npmDepsHash = "sha256-gwk+G//sZ0ulygFDyL8MQb7E5+MCOgH20GvugthRxdc=";
                     installPhase = "cp -r dist $out";
                 };
                 dimosApp = pkgs.writeShellScriptBin "dimos-app-server" ''
