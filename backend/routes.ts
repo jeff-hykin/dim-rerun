@@ -8,11 +8,16 @@
 // api/recording). This server keeps the settings and source, checks the gRPC server answers, starts one on request,
 // and says when anything changes: `stateChanged("state")` (frontend topic state/state, through Desktop's relay; the
 // page re-GETs api/state).
-import { HttpError, type Route, stateChanged } from "./http.ts"
+import { HttpError, type Info, type Route, stateChanged } from "./http.ts"
 import { dimosApp } from "./dimos_app.ts"
 
-export const DESCRIPTION =
-    "Rerun: Rerun's web viewer inside Desktop, on a live gRPC stream (dimos's Rerun bridge by default) or a recording (.rrd)"
+export const INFO: Info = {
+    title: "Rerun",
+    version: "1.0.0",
+    description:
+        "Rerun: Rerun's web viewer inside Desktop, on a live gRPC stream (dimos's Rerun bridge by default) or a " +
+        "recording (.rrd)",
+}
 
 /** dimos's Rerun bridge serves gRPC here (dimos/visualization/rerun/constants.py RERUN_GRPC_PORT) */
 export const GRPC_PORT = "9877"

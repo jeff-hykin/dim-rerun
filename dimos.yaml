@@ -16,98 +16,112 @@ caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
 provides:
-    # what its server answers only its own pages (its endpoints: below are the public API)
-    private:
+    openapi: 3.1.0
+    info:
+        title: Rerun
+        version: 1.0.0
+        description: >-
+            Rerun: Rerun's web viewer inside Desktop, on a live gRPC stream (dimos's Rerun bridge by default) or a recording
+            (.rrd)
+        x-when: you need to view a live Rerun stream or a .rrd recording
+    # what its server answers only its own pages (its paths: below are the public API)
+    x-private:
         - api/state/*
         - api/grpc/*
         - api/recording/*
-    when: you need to view a live Rerun stream or a .rrd recording
-    description: >-
-        Rerun: Rerun's web viewer inside Desktop, on a live gRPC stream (dimos's Rerun bridge by default) or a recording
-        (.rrd)
-    endpoints:
-        - method: GET
-          path: api/state
-          when: you need to know what Rerun shows and whether its stream is up
-          description: >-
-              Rerun's state. Takes nothing; answers JSON: grpc (the settings' gRPC server, {port} or {url}), source
-              (what the viewer shows: kind default, stream, url or file, and its address; @host = the host the browser
-              reached Desktop at), reachable (whether the gRPC server answers; null before a check or for a
-              recording), checkedAt, reload (a counter api/reconnect bumps), hint, and rerun (the rerun CLI's path, or
-              null)
-          role: context
-        - method: POST
-          path: api/settings
-          when: you need Rerun's default live stream to be another port or server
-          description: >-
-              The app's setting, saved: grpc, the Rerun gRPC server the viewer shows by default, a port on Desktop's
-              machine (default 9877, where dimos's Rerun bridge serves; empty means 9877) or a
-              rerun+http(s)://host:port/proxy URL. Checks it and answers the new state (as api/state); anything else
-              gets 400
-          params:
-              grpc:
-                  type: string
-                  required: true
-                  description: "a port (default 9877) or rerun+http(s)://host:port/proxy"
-        - method: POST
-          path: api/open
-          when: you want to open a recording or a live stream in Rerun
-          description: >-
-              Show something in the viewer, saved across restarts: url = a live stream address
-              (rerun+http://host:9877/proxy) or an http(s) .rrd recording URL; or path = a local .rrd file (served to
-              the viewer by this app). Give one of the two. Answers the new state (as api/state); a bad url or path
-              gets 400, a missing file 404
-          params:
-              url:
-                  type: string
-                  description: "rerun+http(s):// stream address, or http(s) URL of a .rrd"
-              path:
-                  type: string
-                  description: absolute path of a local .rrd file
-        - method: DELETE
-          path: api/open
-          when: you want Rerun back on its default live stream
-          description: >-
-              Go back to the default live stream (the settings' gRPC server, rerun+http://<host>:9877/proxy). Takes
-              nothing; answers the new state (as api/state)
-        - method: GET
-          path: api/grpc/check
-          when: Rerun shows no data in a browser on another machine
-          description: >-
-              Whether the shown gRPC server lets a page at origin read it (Rerun allows only localhost origins unless
-              started with --cors-allow-origin). Answers {address (the source's address), allowed}: true or false,
-              or null when it doesn't answer or a recording is shown
-          params:
-              origin:
-                  type: string
-                  required: true
-                  description: 'the page''s origin as the browser reaches it, e.g. http://100.64.0.1:5555'
-        - method: POST
-          path: api/server/start
-          when: no Rerun gRPC server runs on Desktop's machine and you need one
-          description: >-
-              Start a Rerun gRPC server on Desktop's machine (`rerun --serve-grpc` on the settings' port, any host may
-              read it) when none answers there; dimos's Rerun bridges started later send to it. Takes nothing; waits
-              up to 15 s and answers the state (as api/state) plus started (true if it started one) and, when it
-              didn't, reason (already up has none; a recording open, the server set elsewhere, or no rerun CLI)
-        - method: POST
-          path: api/reconnect
-          when: the Rerun view is stale or empty after its server restarted
-          description: >-
-              Check the gRPC server again now and reopen the source in the viewer. Takes nothing; answers the state
-              (as api/state)
-        - method: GET
-          path: "api/recording/{name}"
-          when: you need the bytes of the local .rrd that Rerun has open
-          description: >-
-              The local .rrd opened with api/open path, as bytes (application/octet-stream; what the viewer loads);
-              404 when no local file is open or it is gone
-          params:
-              name:
-                  type: string
-                  required: true
-                  description: >-
-                      the file's name (any name answers the open file; the viewer goes by its .rrd extension)
+    paths:
+        /api/state:
+            get:
+                description: >-
+                    Rerun's state. Takes nothing; answers JSON: grpc (the settings' gRPC server, {port} or {url}), source
+                    (what the viewer shows: kind default, stream, url or file, and its address; @host = the host the browser
+                    reached Desktop at), reachable (whether the gRPC server answers; null before a check or for a recording),
+                    checkedAt, reload (a counter api/reconnect bumps), hint, and rerun (the rerun CLI's path, or null)
+                x-when: you need to know what Rerun shows and whether its stream is up
+                x-dimos-role: context
+        /api/settings:
+            post:
+                description: >-
+                    The app's setting, saved: grpc, the Rerun gRPC server the viewer shows by default, a port on Desktop's
+                    machine (default 9877, where dimos's Rerun bridge serves; empty means 9877) or a rerun+http(s)://host:port/proxy
+                    URL. Checks it and answers the new state (as api/state); anything else gets 400
+                x-when: you need Rerun's default live stream to be another port or server
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    grpc:
+                                        type: string
+                                        description: a port (default 9877) or rerun+http(s)://host:port/proxy
+                                required:
+                                    - grpc
+        /api/open:
+            post:
+                description: >-
+                    Show something in the viewer, saved across restarts: url = a live stream address (rerun+http://host:9877/proxy)
+                    or an http(s) .rrd recording URL; or path = a local .rrd file (served to the viewer by this app). Give
+                    one of the two. Answers the new state (as api/state); a bad url or path gets 400, a missing file 404
+                x-when: you want to open a recording or a live stream in Rerun
+                requestBody:
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    url:
+                                        type: string
+                                        description: rerun+http(s):// stream address, or http(s) URL of a .rrd
+                                    path:
+                                        type: string
+                                        description: absolute path of a local .rrd file
+            delete:
+                description: >-
+                    Go back to the default live stream (the settings' gRPC server, rerun+http://<host>:9877/proxy). Takes
+                    nothing; answers the new state (as api/state)
+                x-when: you want Rerun back on its default live stream
+        /api/grpc/check:
+            get:
+                description: >-
+                    Whether the shown gRPC server lets a page at origin read it (Rerun allows only localhost origins unless
+                    started with --cors-allow-origin). Answers {address (the source's address), allowed}: true or false, or
+                    null when it doesn't answer or a recording is shown
+                x-when: Rerun shows no data in a browser on another machine
+                parameters:
+                    - name: origin
+                      in: query
+                      schema:
+                          type: string
+                      required: true
+                      description: the page's origin as the browser reaches it, e.g. http://100.64.0.1:5555
+        /api/server/start:
+            post:
+                description: >-
+                    Start a Rerun gRPC server on Desktop's machine (`rerun --serve-grpc` on the settings' port, any host may
+                    read it) when none answers there; dimos's Rerun bridges started later send to it. Takes nothing; waits
+                    up to 15 s and answers the state (as api/state) plus started (true if it started one) and, when it didn't,
+                    reason (already up has none; a recording open, the server set elsewhere, or no rerun CLI)
+                x-when: no Rerun gRPC server runs on Desktop's machine and you need one
+        /api/reconnect:
+            post:
+                description: >-
+                    Check the gRPC server again now and reopen the source in the viewer. Takes nothing; answers the state
+                    (as api/state)
+                x-when: the Rerun view is stale or empty after its server restarted
+        /api/recording/{name}:
+            get:
+                description: >-
+                    The local .rrd opened with api/open path, as bytes (application/octet-stream; what the viewer loads);
+                    404 when no local file is open or it is gone
+                x-when: you need the bytes of the local .rrd that Rerun has open
+                parameters:
+                    - name: name
+                      in: path
+                      required: true
+                      schema:
+                          type: string
+                      description: the file's name (any name answers the open file; the viewer goes by its .rrd extension)
 nix:
     cache:
         aarch64-linux:

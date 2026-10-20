@@ -1,12 +1,12 @@
 import { assert, assertEquals } from "@std/assert"
 import { handle } from "./http.ts"
-import { DESCRIPTION, routes, stopStartedServer } from "./routes.ts"
+import { INFO, routes, stopStartedServer } from "./routes.ts"
 
 const call = async (method: string, path: string, body?: unknown) => {
     const response = await handle(
         new Request(`http://app/${path}`, { method, body: body === undefined ? undefined : JSON.stringify(body) }),
         routes,
-        DESCRIPTION,
+        INFO,
     )
     const text = await response!.text()
     let json
@@ -81,9 +81,10 @@ Deno.test("api/grpc/check: a server that lets this page's origin read it, one th
     await call("POST", "api/settings", { grpc: "9877" })
 })
 
-Deno.test("agent.json lists every route", async () => {
-    const { json } = await call("GET", "agent.json")
-    assertEquals(json.endpoints.length, routes.length)
+Deno.test("openapi.json lists every route", async () => {
+    const { json } = await call("GET", "openapi.json")
+    assertEquals(json.openapi, "3.1.0")
+    assertEquals(Object.values(json.paths).flatMap((item) => Object.keys(item as object)).length, routes.length)
 })
 
 Deno.test("api/server/start starts a gRPC server on this machine when none answers (a stand-in rerun CLI)", async () => {
