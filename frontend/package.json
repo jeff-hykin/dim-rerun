@@ -10,7 +10,7 @@
     },
     "dependencies": {
         "@rerun-io/web-viewer": "0.32.0",
-        "dimos-react": "github:jeff-hykin/dimos-react#v0.2.0-beta5",
+        "dimos-react": "github:jeff-hykin/dimos-react#v0.2.0-beta15",
         "react": "^19.1.0",
         "react-dom": "^19.1.0"
     },
