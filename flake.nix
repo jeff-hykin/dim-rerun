@@ -50,7 +50,7 @@
                     outputHash = {
                         aarch64-darwin = "sha256-Ac0wOBFaE5Wpe92YVw5aEVc+83vcIzyGy5atAMzJNnA=";
                         x86_64-darwin = "";
-                        x86_64-linux = "";
+                        x86_64-linux = "sha256-/zH7C4Q4UkV0OqwweqoysC2NkUlQBFwvzpJ4aWv4G9A=";
                         aarch64-linux = "";
                     }.${system};
                 };
