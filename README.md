@@ -43,8 +43,8 @@ There is no `view` endpoint: the viewer draws on a WebGL/WebGPU canvas in the br
 
 ```sh
 deno task test && deno task check     # backend tests, dimos.yaml ↔ routes check
-cd frontend && npm install && npm run typecheck && npm run build
-deno task dev                         # backend on :8787; `npm run dev` in frontend proxies api/ to it
+cd frontend && deno task build       # deno check + vite
+deno task dev                         # backend on :8787; `deno task dev` in frontend proxies api/ to it
 nix build .#dimosApp                  # what Desktop builds: bin/dimos-app-server
 ```
 

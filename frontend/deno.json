@@ -1,0 +1,31 @@
+{
+    "nodeModulesDir": "auto",
+    "tasks": {
+        "dev": "deno run -A npm:vite",
+        "build": "deno task typecheck && deno run -A npm:vite build",
+        "typecheck": "deno check src/"
+    },
+    "imports": {
+        "@rerun-io/web-viewer": "npm:@rerun-io/web-viewer@0.32.0",
+        "react": "npm:react@^19.1.0",
+        "react/": "npm:/react@^19.1.0/",
+        "react-dom": "npm:react-dom@^19.1.0",
+        "react-dom/": "npm:/react-dom@^19.1.0/",
+        "@types/react": "npm:@types/react@^19.1.0",
+        "@types/react-dom": "npm:@types/react-dom@^19.1.0",
+        "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^5.0.0",
+        "vite": "npm:vite@^7.1.0",
+        "dimos-react": "https://raw.githubusercontent.com/jeff-hykin/dimos-react/v0.2.0-beta16/src/index.ts"
+    },
+    "compilerOptions": {
+        "jsx": "react-jsx",
+        "jsxImportSource": "react",
+        "jsxImportSourceTypes": "@types/react",
+        "lib": ["ES2022", "DOM", "DOM.Iterable", "deno.ns"]
+    },
+    "fmt": {
+        "indentWidth": 4,
+        "semiColons": false,
+        "lineWidth": 120
+    }
+}
