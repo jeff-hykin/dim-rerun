@@ -1,6 +1,6 @@
 title: Rerun
 spec-version: v1.3 # the dimos.yaml spec version this file follows
-version: "0.1.11" # this app's own version (its latest release tag)
+version: "0.1.12" # this app's own version (its latest release tag)
 uses:
     "@dimos-gateway":
         - GET /active
