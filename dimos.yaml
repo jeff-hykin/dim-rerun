@@ -1,11 +1,13 @@
 title: Rerun
-spec-version: v1.3 # the dimos.yaml spec version this file follows
+spec-version: v1.4 # the dimos.yaml spec version this file follows
 version: "0.1.12" # this app's own version (its latest release tag)
 uses:
     "@dimos-gateway":
         - GET /active
     "@desktop-gateway":
-        - GET /api/apps
+        - GET /info/apps
+        - GET /management/gateways/zenoh
+        - POST /ui/apps/{pkg}/frontend/{topic}
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
     "@zenoh-gateway": ">=0.5 <0.6"
 # the page runs Rerun's web viewer, which reads a Rerun gRPC server (gRPC-web fetches): on Desktop's machine as the

@@ -158,7 +158,7 @@ export function App() {
     const zenoh = useZenoh()
     useEffect(() => {
         const read = () =>
-            fetch("../../dimos-gateway/active").then((r) => r.ok ? r.json() : null).then(
+            fetch("../../gateways/dimos/active").then((r) => r.ok ? r.json() : null).then(
                 (body) => setRunning(body ? body.running === true : null),
                 () => setRunning(null),
             )
