@@ -1,8 +1,9 @@
 title: Rerun
-spec-version: v1.0 # the dimos.yaml spec version this file follows
+spec-version: v1.3 # the dimos.yaml spec version this file follows
+version: "0.1.11" # this app's own version (its latest release tag)
 uses:
     "@dimos-gateway":
-        - GET /runs
+        - GET /active
     "@desktop-gateway":
         - GET /api/apps
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
@@ -12,6 +13,20 @@ uses:
 connects:
     - http://*:*
     - https://*:*
+# spec v1.2: what the page may do on zenoh (zenoh's ACL config); it only subscribes
+zenoh:
+    default_permission: deny
+    read:
+        # dim-app's useBackendState: this app's own state/<key> events (Desktop's <namespace>/apps/<app>/frontend)
+        - id: own-frontend-topics
+          messages: [declare_subscriber, put]
+          key_exprs: ["dimos-desktop/*/apps/dim-rerun/frontend/**"]
+          permission: allow
+        # Desktop's `runs` event (what runs changed), so the "nothing is running" hint follows it live
+        - id: desktop-runs
+          messages: [declare_subscriber, put]
+          key_exprs: ["dimos-desktop/*/desktop/events/runs"]
+          permission: allow
 caches:
     - url: "https://dimos-desktop.cachix.org"
       key: "dimos-desktop.cachix.org-1:A4P35aGJGmCan92LWyamtSFXMqaVE+VRFYnrJ8QMTeQ="
