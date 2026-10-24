@@ -15,7 +15,7 @@
         "@types/react-dom": "npm:@types/react-dom@^19.1.0",
         "@vitejs/plugin-react": "npm:@vitejs/plugin-react@^5.0.0",
         "vite": "npm:vite@^7.1.0",
-        "dimos-react": "https://raw.githubusercontent.com/jeff-hykin/dimos-react/v0.3.1/src/index.ts"
+        "dimos-react": "https://raw.githubusercontent.com/jeff-hykin/dimos-react/v0.3.2/src/index.ts"
     },
     "compilerOptions": {
         "jsx": "react-jsx",
