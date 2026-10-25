@@ -54,7 +54,7 @@
                         aarch64-linux = "";
                     }.${system};
                 };
-                # dimos-react as esm.sh builds its tag (frontend/tools/esm_fetch.ts): a vite build with network that
+                # dimos-react's source at its tag (frontend/tools/esm_fetch.ts): a vite build with network that
                 # keeps only what it fetched, so fixed-output; the same on every system. `deno task update-hashes` refreshes it.
                 frontendEsm = pkgs.stdenvNoCC.mkDerivation {
                     name = "rerun-frontend-esm";
@@ -71,9 +71,9 @@
                     dontFixup = true;
                     outputHashMode = "recursive";
                     outputHashAlgo = "sha256";
-                    outputHash = "sha256-Z/3MIZsBiQ5QOusPQF0m2+IVQvUwAULw/LxupB+N19E=";
+                    outputHash = "sha256-utsCgw1Bc1BFp4xFzysHymcAMGFGaNG6fVLiA01WBeo=";
                 };
-                # the page: React + Vite against those modules and that esm.sh cache, offline
+                # the page: React + Vite against those modules and that dimos-react cache, offline
                 frontend = pkgs.stdenvNoCC.mkDerivation {
                     name = "rerun-frontend";
                     src = pageFiles;
