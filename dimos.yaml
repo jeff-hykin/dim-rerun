@@ -1,13 +1,20 @@
 title: Rerun
-spec-version: v1.4 # the dimos.yaml spec version this file follows
-version: "0.2.1" # this app's own version (its latest release tag)
+spec-version: v1.5 # the dimos.yaml spec version this file follows
+version: "0.3.0" # this app's own version (its latest release tag)
 uses:
     "@dimos-gateway":
         - GET /active
     "@desktop-gateway":
-        - GET /info/apps
-        - GET /management/gateways/zenoh
-        - POST /ui/apps/{pkg}/frontend/{topic}
+        env:
+            # what this server reads of DIMOS_APP (backend/main.ts, backend/routes.ts); `app check` says when Desktop
+            # doesn't set one, and a launch that can't resolve one says so in this app's log
+            DIMOS_APP.socket: the unix socket this server binds
+            DIMOS_APP.dataDir: its own folder, for the recordings it has been shown
+            DIMOS_APP.dimosPython: the python that runs dimos's Rerun bridge
+        endpoints:
+            - GET /info/apps
+            - GET /management/gateways/zenoh
+            - POST /ui/apps/{pkg}/frontend/{topic}
     # the dim-app SDK's zenoh client (backend state, events): the zenoh bridge and how it finds it
     "@zenoh-gateway": ">=0.5 <0.6"
 # the page runs Rerun's web viewer, which reads a Rerun gRPC server (gRPC-web fetches): on Desktop's machine as the
