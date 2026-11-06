@@ -4,7 +4,7 @@ A [dimOS Desktop](https://github.com/jeff-hykin/dimos-desktop) app that runs the
 viewer** inside Desktop: a live stream, or a recording (`.rrd`).
 
 ```sh
-dimos-desktop install https://github.com/jeff-hykin/dim-rerun
+dimos-desktop install https://github.com/dimensionalOS/dim-rerun
 ```
 
 The viewer is Rerun's own embeddable one (`@rerun-io/web-viewer`, pinned to dimos's `rerun-sdk` version), bundled into
