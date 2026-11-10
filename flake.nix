@@ -49,9 +49,9 @@
                     outputHashAlgo = "sha256";
                     outputHash = {
                         aarch64-darwin = "sha256-Ac0wOBFaE5Wpe92YVw5aEVc+83vcIzyGy5atAMzJNnA=";
-                        x86_64-darwin = "";
+                        x86_64-darwin = "sha256-HOyM79tSkGvgq3OjvpjjfFkWGIsqAMnHD4TUQq3keHc=";
                         x86_64-linux = "sha256-/zH7C4Q4UkV0OqwweqoysC2NkUlQBFwvzpJ4aWv4G9A=";
-                        aarch64-linux = "";
+                        aarch64-linux = "sha256-PrQia6OZT7+yeNqK28yTNGuWoopP1/RETMY7iIbxh/o=";
                     }.${system};
                 };
                 # dimos-react's source at its tag (frontend/tools/esm_fetch.ts): a vite build with network that
